@@ -1,0 +1,2 @@
+# ให้ git เก็บไฟล์ข้อความเป็น LF ใน repo (เครื่อง Windows จะได้ CRLF ตอน checkout ตามค่า core.autocrlf)
+* text=auto

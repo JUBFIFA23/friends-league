@@ -1,0 +1,195 @@
+/* ══════════════════ THEME TOKENS ══════════════════
+   ค่า RGB แบบ "r g b" ให้ Tailwind ใส่ความโปร่งใสได้ เช่น bg-accent/10
+   สว่าง = ค่าเริ่มต้น (สดใส) · มืด = โทนดำ-ทองแบบเดิม (สลับได้ที่ปุ่มบนหัวเว็บ) */
+:root, [data-theme="light"] {
+  color-scheme: light;
+  --page: 238 242 248;      /* #EEF2F8 */
+  --surface: 255 255 255;
+  --sunken: 243 245 250;    /* #F3F5FA ช่องกรอก/กล่องย่อย */
+  --ink: 15 23 42;          /* #0F172A */
+  --soft: 51 65 85;         /* #334155 */
+  --muted: 86 101 124;      /* #56657C ≥5:1 บนทุกพื้น */
+  --faint: 148 163 184;     /* #94A3B8 ใช้กับของตกแต่งเท่านั้น */
+  --line: 15 23 42;
+  --accent: 79 70 229;      /* #4F46E5 indigo */
+  --on-accent: 255 255 255;
+  --win: 20 122 58;
+  --loss: 185 28 28;
+  --scrim: rgb(15 23 42 / .45);
+
+  --surface-bg: #FFFFFF;
+  --surface-shadow: 0 1px 2px rgb(15 23 42 / .05), 0 12px 32px -16px rgb(15 23 42 / .18);
+  --surface-shadow-hover: 0 2px 4px rgb(15 23 42 / .06), 0 18px 40px -16px rgb(79 70 229 / .28);
+  --primary-bg: linear-gradient(135deg, #6366F1, #4F46E5 60%, #4338CA);
+  --primary-shadow: 0 8px 22px -10px rgb(79 70 229 / .7);
+  --brand-bg: linear-gradient(135deg, #6366F1, #0EA5E9);
+  --brand-ink: #FFFFFF;
+  --hl: linear-gradient(180deg, #6366F1, #4338CA);       /* ตัวเลขเด่น (แต้ม/สถิติ) */
+  --card-inner: linear-gradient(180deg, #FFFFFF, #F7F9FC);
+  --sheen: rgb(99 102 241 / .10);
+
+  --t1-frame: linear-gradient(160deg, #FCD34D, #D4A017 40%, rgb(15 23 42 / .07) 75%);
+  --t1-num:   linear-gradient(180deg, #D49B00, #8C5D00);
+  --t1-label: #8C5D00;
+  --t2-frame: linear-gradient(160deg, #E2E8F0, #94A3B8 40%, rgb(15 23 42 / .07) 75%);
+  --t2-num:   linear-gradient(180deg, #7C8BA1, #475569);
+  --t2-label: #56657C;
+  --t3-frame: linear-gradient(160deg, #FDBA74, #C2410C 40%, rgb(15 23 42 / .07) 75%);
+  --t3-num:   linear-gradient(180deg, #E8772E, #A4470A);
+  --t3-label: #A4470A;
+  --t0-frame: rgb(15 23 42 / .10);
+  --t0-num:   linear-gradient(180deg, #475569, #1E293B);
+  --t0-label: #56657C;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --page: 7 7 10;
+  --surface: 24 24 31;
+  --sunken: 13 13 17;
+  --ink: 255 255 255;
+  --soft: 212 212 216;
+  --muted: 138 138 150;     /* #8A8A96 */
+  --faint: 82 82 91;
+  --line: 255 255 255;
+  --accent: 232 196 104;    /* #E8C468 gold */
+  --on-accent: 0 0 0;
+  --win: 52 211 153;
+  --loss: 248 113 113;
+  --scrim: rgb(0 0 0 / .8);
+
+  --surface-bg: linear-gradient(180deg, #18181F, #111116);
+  --surface-shadow: inset 0 1px 0 rgb(255 255 255 / .06), 0 24px 50px -28px rgb(0 0 0 / .9);
+  --surface-shadow-hover: inset 0 1px 0 rgb(255 255 255 / .08), 0 24px 50px -24px rgb(0 0 0 / .95);
+  --primary-bg: linear-gradient(180deg, #F7E3A1, #E8C468 55%, #B8912F);
+  --primary-shadow: 0 8px 24px -8px rgb(232 196 104 / .55);
+  --brand-bg: linear-gradient(180deg, #F7E3A1, #E8C468 55%, #B8912F);
+  --brand-ink: #000000;
+  --hl: linear-gradient(180deg, #F7E3A1, #E8C468 55%, #B8912F);
+  --card-inner: linear-gradient(180deg, #1B1B22, #0D0D11);
+  --sheen: rgb(255 255 255 / .10);
+
+  --t1-frame: linear-gradient(160deg, #F7E3A1, #B8912F 38%, rgb(255 255 255 / .06) 72%);
+  --t1-num:   linear-gradient(180deg, #F7E3A1, #E8C468 55%, #B8912F);
+  --t1-label: #E8C468;
+  --t2-frame: linear-gradient(160deg, #F1F2F4, #9CA3AF 38%, rgb(255 255 255 / .06) 72%);
+  --t2-num:   linear-gradient(#D4D7DD, #D4D7DD);
+  --t2-label: #D4D7DD;
+  --t3-frame: linear-gradient(160deg, #E9B387, #8C5A33 38%, rgb(255 255 255 / .06) 72%);
+  --t3-num:   linear-gradient(#D9A37A, #D9A37A);
+  --t3-label: #D9A37A;
+  --t0-frame: rgb(255 255 255 / .10);
+  --t0-num:   linear-gradient(#D4D4D8, #D4D4D8);
+  --t0-label: #8A8A96;
+}
+
+/* ══════════════════ BASE ══════════════════ */
+body {
+  font-family: 'Noto Sans Thai', system-ui, -apple-system, sans-serif;
+  background: rgb(var(--page));
+  color: rgb(var(--soft));
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Kanit ใช้ตัวเลขสูงเท่ากันอยู่แล้ว · tabular ให้ตัวเลขในตารางตรงคอลัมน์ */
+.font-display { font-variant-numeric: tabular-nums; }
+
+/* ══════════════════ BOOT SCREEN ══════════════════ */
+.boot {
+  display: grid;
+  place-items: center;
+  gap: 18px;
+  height: 100vh;
+  color: rgb(var(--muted));
+  font-size: 14px;
+  text-align: center;
+  padding: 24px;
+}
+.boot-ring {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgb(var(--line) / .1);
+  border-top-color: rgb(var(--accent));
+  animation: fl-spin .8s linear infinite;
+}
+@keyframes fl-spin { to { transform: rotate(360deg); } }
+
+/* ══════════════════ SURFACES / BUTTONS ══════════════════ */
+/* ใส่เงาผ่าน --tw-shadow เพื่อให้ใช้ร่วมกับ ring-* ของ Tailwind ได้ */
+.fl-surface {
+  background: var(--surface-bg);
+  --tw-shadow: var(--surface-shadow);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+.fl-lift { transition: box-shadow .2s ease, transform .2s ease; }
+.fl-lift:hover { --tw-shadow: var(--surface-shadow-hover); transform: translateY(-1px); }
+
+.fl-scrim { background: var(--scrim); }
+.fl-btn-primary { background: var(--primary-bg); color: rgb(var(--on-accent)); box-shadow: var(--primary-shadow); }
+.fl-brand { background: var(--brand-bg); color: var(--brand-ink); }
+.fl-hl { background: var(--hl); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* ══════════════════ SCROLLBAR ══════════════════ */
+::-webkit-scrollbar        { width: 9px; height: 9px; }
+::-webkit-scrollbar-track  { background: rgb(var(--page)); }
+::-webkit-scrollbar-thumb  { background: rgb(var(--line) / .18); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--line) / .28); }
+
+/* ══════════════════ FORM CONTROLS ══════════════════ */
+select option { background: rgb(var(--surface)); color: rgb(var(--ink)); }
+
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }
+
+input[type=color] {
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type=color]::-webkit-color-swatch {
+  border: 1px solid rgb(var(--line) / .15);
+  border-radius: 10px;
+}
+
+/* ══════════════════ COLLECTOR CARD ══════════════════ */
+/* กรอบ/เลขเสื้อตามอันดับ: fl-tier-1 ทอง · 2 เงิน · 3 ทองแดง · 0 ธรรมดา */
+.fl-tier-0 { --frame: var(--t0-frame); --num: var(--t0-num); --tier-label: var(--t0-label); }
+.fl-tier-1 { --frame: var(--t1-frame); --num: var(--t1-num); --tier-label: var(--t1-label); }
+.fl-tier-2 { --frame: var(--t2-frame); --num: var(--t2-num); --tier-label: var(--t2-label); }
+.fl-tier-3 { --frame: var(--t3-frame); --num: var(--t3-num); --tier-label: var(--t3-label); }
+.fl-frame { background: var(--frame); }
+.fl-num { background: var(--num); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.fl-tier-label { color: var(--tier-label); }
+.fl-card-inner { background: var(--card-inner); }
+
+/* การ์ดเอียงตามเมาส์ (JS ใส่ transform) + แสงวาบพาดผ่านตอน hover */
+.fl-tilt { transition: transform .25s ease-out; transform-style: preserve-3d; will-change: transform; }
+.fl-sheen {
+  background: linear-gradient(115deg, transparent 35%, var(--sheen) 48%, transparent 60%);
+  background-size: 250% 100%;
+  background-position: 120% 0;
+  transition: background-position .6s ease-out;
+}
+.fl-tilt:hover .fl-sheen { background-position: -20% 0; }
+
+/* เลขเสื้อปรับตามความกว้างการ์ด (ไม่ใช่ความกว้างจอ) → การ์ด 2/3/4 คอลัมน์ไม่ล้นทับชื่อทีม */
+.fl-card { container-type: inline-size; }
+.fl-card-num { font-size: 36cqw; }
+
+/* ══════════════════ MOTION ══════════════════ */
+@keyframes fl-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fl-enter { animation: fl-fade-up .28s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, .boot-ring { animation: none !important; transition: none !important; }
+}

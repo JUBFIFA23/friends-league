@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#EEF2F8" />
+<title>Friends League · eFootball 2027 Mobile</title>
+
+<!-- ═══ THEME: ตั้งธีมก่อนหน้าเว็บวาด กันจอกะพริบ (ค่าเริ่มต้น = สว่าง) ═══ -->
+<script>
+  (function () {
+    var t = "light";
+    try { t = JSON.parse(localStorage.getItem("fl_theme")) === "dark" ? "dark" : "light"; } catch (e) {}
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+
+<!-- ═══ PRELOAD: ให้ app.js เริ่มโหลดพร้อม Babel ไม่ต้องรอต่อคิว ═══ -->
+<link rel="preload" href="app.js" as="fetch" crossorigin="anonymous">
+
+<!-- ═══ FONTS: Kanit = หัวข้อ/ตัวเลข · Noto Sans Thai = เนื้อหา ═══ -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- ═══ STYLES ═══ -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // สีทั้งหมดอ้างตัวแปรใน style.css → สลับธีมแค่เปลี่ยน data-theme ที่ <html>
+  tailwind.config = {
+    darkMode: ["selector", '[data-theme="dark"]'],
+    theme: {
+      extend: {
+        colors: {
+          page:        "rgb(var(--page) / <alpha-value>)",
+          surface:     "rgb(var(--surface) / <alpha-value>)",
+          sunken:      "rgb(var(--sunken) / <alpha-value>)",
+          ink:         "rgb(var(--ink) / <alpha-value>)",
+          soft:        "rgb(var(--soft) / <alpha-value>)",
+          muted:       "rgb(var(--muted) / <alpha-value>)",
+          faint:       "rgb(var(--faint) / <alpha-value>)",
+          line:        "rgb(var(--line) / <alpha-value>)",
+          accent:      "rgb(var(--accent) / <alpha-value>)",
+          "on-accent": "rgb(var(--on-accent) / <alpha-value>)",
+          win:         "rgb(var(--win) / <alpha-value>)",
+          loss:        "rgb(var(--loss) / <alpha-value>)",
+        },
+        fontFamily: {
+          sans:    ['"Noto Sans Thai"', "system-ui", "sans-serif"],
+          display: ["Kanit", '"Noto Sans Thai"', "sans-serif"],
+        },
+      },
+    },
+  };
+</script>
+<link rel="stylesheet" href="style.css">
+
+<!-- ═══ REACT (global window.React / window.ReactDOM — ไม่ใช้ import) ═══ -->
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<!-- Babel ต้องล็อกไว้ที่ 7.x ห้ามลบเลขเวอร์ชัน / ห้ามอัปเป็น 8
+     Babel 8 แอบใส่ import "react/jsx-runtime" → ค้างหน้า "กำลังโหลด…" (ทดสอบแล้ว ใส่ @jsxRuntime classic ก็ไม่ช่วย) -->
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
+</head>
+<body>
+
+  <div id="root">
+    <div class="boot">
+      <div class="boot-ring"></div>
+      <div>กำลังโหลด Friends League…</div>
+    </div>
+  </div>
+
+  <!-- data-presets="react" = แปลงเฉพาะ JSX (ห้ามมี import ในไฟล์) -->
+  <script type="text/babel" data-presets="react" src="app.js"></script>
+
+  <!-- ═══ ERROR GUARD: ถ้า 6 วิแล้วยังไม่ mount แปลว่ามีอะไรพัง ═══ -->
+  <script>
+    setTimeout(function () {
+      var boot = document.querySelector('#root .boot');
+      if (!boot) return; // React mount สำเร็จแล้ว
+      boot.innerHTML =
+        '<div style="max-width:460px;text-align:left;line-height:1.9">' +
+        '<div style="color:rgb(var(--accent));font-size:15px;margin-bottom:10px">⚠️ โหลดไม่สำเร็จ</div>' +
+        '<div style="font-size:13px">เช็ค 3 ข้อนี้ตามลำดับ:</div>' +
+        '<div style="font-size:13px;margin-top:8px">' +
+        '1. เปิดผ่าน http://localhost ไม่ใช่ file:// ?<br>' +
+        '2. app.js อยู่โฟลเดอร์เดียวกับ index.html ?<br>' +
+        '3. app.js มีคำว่า <code style="color:rgb(var(--accent))">import</code> อยู่ไหม → ต้องไม่มี<br>' +
+        '</div>' +
+        '<div style="font-size:12px;color:rgb(var(--faint));margin-top:12px">กด F12 → แท็บ Console เพื่อดูรายละเอียด</div>' +
+        '</div>';
+    }, 6000);
+  </script>
+
+</body>
+</html>
