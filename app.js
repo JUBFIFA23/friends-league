@@ -38,6 +38,8 @@ const P = {
   eye:'<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
   eyeOff:'<path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="m2 2 20 20"/>',
   key:'<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
+  cards:'<rect width="14" height="18" x="3" y="3" rx="2"/><path d="M21 7v12a2 2 0 0 1-2 2H9"/><path d="M7 8h6M7 12h6"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   userPlus:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/>'
 };
 
@@ -78,11 +80,11 @@ async function connectCloud() {
 let cloudQueue = Promise.resolve();
 const enqueue = job => (cloudQueue = cloudQueue.then(job, job));
 
-// เทียบรายการนัดเก่า/ใหม่ แล้วเขียนเฉพาะนัดที่เปลี่ยน
-function syncMatches(db, prev, next) {
+// เทียบรายการเก่า/ใหม่ (นัด หรือ การ์ด) แล้วเขียนเฉพาะเอกสารที่เปลี่ยน
+function syncCollection(db, path, prev, next) {
   const before = {}; prev.forEach(m => before[m.id] = m);
   const after = {};  next.forEach(m => after[m.id] = m);
-  const col = db.collection("matches");
+  const col = db.collection(path);
   return enqueue(async () => {
     for (const m of prev) if (!after[m.id]) await col.doc(String(m.id)).delete();
     for (const m of next) {
@@ -512,9 +514,16 @@ const Segmented = ({ value, onChange, items }) => (
   </div>
 );
 
+// หน้าต่างซ้อนกันได้ (เช่น เลือกการ์ดบนหน้าจัดนักเตะ) → Esc ปิดแค่บนสุด
+const MODAL_STACK = [];
 const Modal = ({ children, onClose, className = "max-w-md" }) => {
+  const token = useRef({});
   useEffect(() => {
-    const onKey = e => { if (e.key === "Escape") onClose(); };
+    MODAL_STACK.push(token.current);
+    return () => { const i = MODAL_STACK.indexOf(token.current); if (i >= 0) MODAL_STACK.splice(i, 1); };
+  }, []);
+  useEffect(() => {
+    const onKey = e => { if (e.key === "Escape" && MODAL_STACK[MODAL_STACK.length - 1] === token.current) onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -912,6 +921,7 @@ function Bench({ team }) {
         <div key={i} className={"flex min-w-0 items-center gap-2 rounded-lg bg-sunken px-2 py-1.5 text-xs ring-1 ring-line/[0.06] " + (p.name ? "" : "opacity-50")}>
           <span className="w-5 shrink-0 text-center font-display font-semibold text-accent">{p.num || "–"}</span>
           <span className="min-w-0 flex-1 truncate text-ink">{p.name || "ว่าง"}</span>
+          {p.type && <TypeBadge type={p.type} short />}
           {p.pos && <span className="shrink-0 text-[10px] text-muted">{p.pos}</span>}
         </div>
       ))}
@@ -919,15 +929,45 @@ function Bench({ team }) {
   );
 }
 
-function SquadModal({ team, onClose, onSave }) {
+function SquadModal({ team, teams, cards, onClose, onSave }) {
   const [s, setS] = useState(() => squadOf(team));
   const [tab, setTab] = useState("start");
-  const setRow = (k, i, f, v) => setS({ ...s, [k]: s[k].map((p, j) => j === i ? { ...p, [f]: v } : p) });
+  const [picking, setPicking] = useState(null);   // { k: "starters" | "subs", i }
+  const patchRow = (k, i, patch) => setS({ ...s, [k]: s[k].map((p, j) => j === i ? { ...p, ...patch } : p) });
+  // พิมพ์ชื่อเอง = ไม่ผูกกับการ์ดในคลังแล้ว
+  const typeName = (k, i, v) => patchRow(k, i, { name: v, cardId: null, type: "", ovr: null });
+  const setNum = (k, i, v) => patchRow(k, i, { num: v.replace(/\D/g, "").slice(0, 2) });
   const slots = FORMATIONS[s.formation];
+  const taken = [...s.starters, ...s.subs].map(p => p.cardId).filter(Boolean);
   const BOX = INPUT.replace("w-full ", "");   // ช่องเล็ก: ไม่เอา w-full มาชนกับความกว้างที่กำหนดเอง
-  const NUM = BOX + " w-14 shrink-0 bg-surface px-2 text-center";
+  const NUM = BOX + " w-12 shrink-0 bg-surface px-1 text-center";
+
+  const pick = c => {
+    const { k, i } = picking;
+    patchRow(k, i, { name: c.name, cardId: c.id, type: c.type, ovr: c.ovr || null, ...(k === "subs" && c.pos ? { pos: c.pos } : {}) });
+    setPicking(null);
+  };
+  const row = (k, i, p, lead, placeholder) => (
+    <div key={i}>
+      <div className="flex items-center gap-1.5">
+        {lead}
+        <input value={p.name} onChange={e => typeName(k, i, e.target.value)} placeholder={placeholder} className={INPUT + " min-w-0 bg-surface"} />
+        <button type="button" onClick={() => setPicking({ k, i })} aria-label="เลือกจากคลังการ์ด" title="เลือกจากคลังการ์ด"
+          className="grid h-[42px] w-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/20 hover:bg-accent/15">
+          <Ic n="cards" size={16} />
+        </button>
+        <input value={p.num} onChange={e => setNum(k, i, e.target.value)} inputMode="numeric" placeholder="#" aria-label="เบอร์เสื้อ" className={NUM} />
+      </div>
+      {p.type && (
+        <div className="mt-1 flex items-center gap-1.5 pl-1 text-[11px] text-muted">
+          <TypeBadge type={p.type} />{p.ovr && <span>OVR <span className="font-semibold text-ink">{p.ovr}</span></span>}
+        </div>
+      )}
+    </div>
+  );
 
   return (
+    <>
     <Modal onClose={onClose} className="max-w-xl">
       <ModalHead kicker={team.name} title="จัดนักเตะ" onClose={onClose} />
       <Field label="แผนการเล่น">
@@ -939,27 +979,20 @@ function SquadModal({ team, onClose, onSave }) {
         <Segmented value={tab} onChange={setTab}
           items={[["start", "ตัวจริง " + filled(s.starters) + "/" + N_START], ["sub", "สำรอง " + filled(s.subs) + "/" + N_SUB]]} />
       </div>
+      <p className="-mt-2 mb-3 flex items-center gap-1.5 text-xs text-muted">
+        กด <Ic n="cards" size={13} className="text-accent" /> เพื่อเลือกจากคลังการ์ด หรือพิมพ์ชื่อเองก็ได้
+      </p>
 
       <div className="space-y-2">
-        {tab === "start" ? s.starters.map((p, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="w-12 shrink-0 rounded-lg bg-accent/10 py-2 text-center text-[11px] font-semibold text-accent">{slots[i][0]}</span>
-            <input value={p.name} onChange={e => setRow("starters", i, "name", e.target.value)} placeholder="ชื่อนักเตะ" className={INPUT + " min-w-0 bg-surface"} />
-            <input value={p.num} onChange={e => setRow("starters", i, "num", e.target.value.replace(/\D/g, "").slice(0, 2))}
-              inputMode="numeric" placeholder="เบอร์" aria-label="เบอร์เสื้อ" className={NUM} />
-          </div>
-        )) : s.subs.map((p, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <select value={p.pos} onChange={e => setRow("subs", i, "pos", e.target.value)} aria-label="ตำแหน่ง"
-              className={BOX + " w-[92px] shrink-0 bg-surface px-2 text-xs"}>
-              <option value="">ตำแหน่ง</option>
-              {POSITIONS.map(x => <option key={x} value={x}>{x}</option>)}
-            </select>
-            <input value={p.name} onChange={e => setRow("subs", i, "name", e.target.value)} placeholder={"สำรองคนที่ " + (i + 1)} className={INPUT + " min-w-0 bg-surface"} />
-            <input value={p.num} onChange={e => setRow("subs", i, "num", e.target.value.replace(/\D/g, "").slice(0, 2))}
-              inputMode="numeric" placeholder="เบอร์" aria-label="เบอร์เสื้อ" className={NUM} />
-          </div>
-        ))}
+        {tab === "start"
+          ? s.starters.map((p, i) => row("starters", i, p,
+              <span className="w-11 shrink-0 rounded-lg bg-accent/10 py-2 text-center text-[11px] font-semibold text-accent">{slots[i][0]}</span>, "ชื่อนักเตะ"))
+          : s.subs.map((p, i) => row("subs", i, p,
+              <select value={p.pos} onChange={e => patchRow("subs", i, { pos: e.target.value })} aria-label="ตำแหน่ง"
+                className={BOX + " w-[68px] shrink-0 bg-surface px-1.5 text-xs"}>
+                <option value="">ตน.</option>
+                {POSITIONS.map(x => <option key={x} value={x}>{x}</option>)}
+              </select>, "สำรองคนที่ " + (i + 1)))}
       </div>
 
       <div className="mt-6 flex justify-end gap-3">
@@ -967,6 +1000,220 @@ function SquadModal({ team, onClose, onSave }) {
         <Btn variant="primary" onClick={() => onSave(team.id, s)}><Ic n="check" size={15} /> บันทึก</Btn>
       </div>
     </Modal>
+    {/* อยู่นอก Modal: ถ้าซ้อนข้างใน transform ของแอนิเมชันจะขังหน้าต่างไว้ในการ์ด */}
+    {picking && (
+      <CardPicker cards={cards} teams={teams} team={team} taken={taken}
+        pos={picking.k === "starters" ? slots[picking.i][0] : s.subs[picking.i].pos}
+        onPick={pick} onClose={() => setPicking(null)} />
+    )}
+    </>
+  );
+}
+
+/* ══════════════════════════ CARD LIBRARY (คลังการ์ด · ไม่รับการ์ด Standard) ══════════════════════════
+   card = { id, name, type, pos, ovr, teamId }  teamId = ทีมเจ้าของการ์ด (null = ใช้ได้ทุกทีม)
+   cloud: collection "cards" การ์ดละ 1 เอกสาร · เครื่องเดียว: localStorage fl_cards */
+const CARD_TYPES = ["Epic", "Big Time", "Show Time", "Highlight", "POTW", "Featured", "Trending", "Legend"];
+const TYPE_STYLE = {
+  "Epic":      "bg-violet-500/15 text-violet-700 ring-violet-500/25 dark:text-violet-300",
+  "Big Time":  "bg-amber-500/15 text-amber-700 ring-amber-500/25 dark:text-amber-300",
+  "Show Time": "bg-rose-500/15 text-rose-700 ring-rose-500/25 dark:text-rose-300",
+  "Highlight": "bg-sky-500/15 text-sky-700 ring-sky-500/25 dark:text-sky-300",
+  "POTW":      "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300",
+};
+const TypeBadge = ({ type, short }) => type ? (
+  <span className={"inline-block shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 " + (TYPE_STYLE[type] || "bg-line/[0.05] text-soft ring-line/10")}>
+    {short ? type.split(" ").map(w => w[0]).join("") : type}
+  </span>
+) : null;
+const newCardId = () => "c" + Date.now().toString(36) + randomHex(3);
+// สะกดไม่ตรงเป๊ะก็ได้ เช่น "big time", "bigtime", "potw" → ชื่อมาตรฐาน · Standard/ไม่รู้จัก → null
+const normType = t => {
+  const k = String(t || "").toLowerCase().replace(/[^a-z]/g, "");
+  return CARD_TYPES.find(x => x.toLowerCase().replace(/[^a-z]/g, "") === k) || null;
+};
+const normPos = p => { const k = String(p || "").trim().toUpperCase(); return POSITIONS.includes(k) ? k : ""; };
+const byOvr = (a, b) => (b.ovr || 0) - (a.ovr || 0) || a.name.localeCompare(b.name);
+
+// CSV: แถวแรกเป็นหัวตาราง name,type,pos,ovr,team (team = ชื่อทีมหรือชื่อเจ้าของ ไม่ใส่ก็ได้)
+function parseCardsCsv(text, teams) {
+  const rows = text.replace(/^﻿/, "").split(/\r?\n/).filter(l => l.trim()).map(l => {
+    const out = []; let cur = "", q = false;
+    for (let i = 0; i < l.length; i++) {
+      const ch = l[i];
+      if (q) { if (ch === '"' && l[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') q = false; else cur += ch; }
+      else if (ch === '"') q = true; else if (ch === ",") { out.push(cur.trim()); cur = ""; } else cur += ch;
+    }
+    out.push(cur.trim());
+    return out;
+  });
+  if (!rows.length) return { cards: [], skipped: 0 };
+  const head = rows[0].map(h => h.toLowerCase());
+  const col = k => head.indexOf(k);
+  const [iN, iT, iP, iO, iTm] = ["name", "type", "pos", "ovr", "team"].map(col);
+  if (iN < 0 || iT < 0) return { error: "แถวแรกต้องมีหัวตาราง name และ type" };
+  const cards = []; let skipped = 0;
+  rows.slice(1).forEach(r => {
+    const name = r[iN], type = normType(r[iT]);
+    if (!name || !type) { skipped++; return; }
+    const tn = iTm >= 0 ? (r[iTm] || "").toLowerCase() : "";
+    const team = tn ? teams.find(t => t.name.toLowerCase() === tn || (t.owner || "").toLowerCase() === tn) : null;
+    const ovr = iO >= 0 ? parseInt(r[iO], 10) : NaN;
+    cards.push({ id: newCardId() + cards.length, name, type, pos: iP >= 0 ? normPos(r[iP]) : "", ovr: ovr > 0 ? ovr : null, teamId: team ? team.id : null });
+  });
+  return { cards, skipped };
+}
+
+function CardModal({ card, teams, onClose, onSave, onDelete }) {
+  const [f, setF] = useState(card.id ? card : { name: "", type: "Epic", pos: "", ovr: "", teamId: null });
+  const set = (k, v) => setF({ ...f, [k]: v });
+  const ok = f.name.trim() && f.type;
+  return (
+    <Modal onClose={onClose}>
+      <ModalHead kicker="คลังการ์ด" title={card.id ? "แก้ไขการ์ด" : "เพิ่มการ์ด"} onClose={onClose} />
+      <div className="space-y-3">
+        <Field label="ชื่อนักเตะ"><input value={f.name} onChange={e => set("name", e.target.value)} placeholder="เช่น R. Carlos" className={INPUT} /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="ประเภทการ์ด">
+            <select value={f.type} onChange={e => set("type", e.target.value)} className={INPUT}>
+              {CARD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </Field>
+          <Field label="ตำแหน่ง">
+            <select value={f.pos} onChange={e => set("pos", e.target.value)} className={INPUT}>
+              <option value="">—</option>
+              {POSITIONS.map(x => <option key={x} value={x}>{x}</option>)}
+            </select>
+          </Field>
+          <Field label="OVR"><input value={f.ovr || ""} onChange={e => set("ovr", e.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" placeholder="เช่น 103" className={INPUT} /></Field>
+          <Field label="เจ้าของการ์ด">
+            <select value={f.teamId == null ? "" : f.teamId} onChange={e => set("teamId", e.target.value === "" ? null : +e.target.value)} className={INPUT}>
+              <option value="">ทุกทีมใช้ได้</option>
+              {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </Field>
+        </div>
+        <p className="text-[11px] text-muted">ไม่รับการ์ด Standard</p>
+      </div>
+      <div className="mt-6 flex justify-between">
+        {card.id ? <Btn variant="danger" onClick={() => { if (confirm("ลบการ์ด " + card.name + "?")) onDelete(card.id); }}><Ic n="trash" size={14} /> ลบ</Btn> : <span />}
+        <div className="flex gap-3">
+          <Btn onClick={onClose}>ยกเลิก</Btn>
+          <Btn variant="primary" disabled={!ok} onClick={() => onSave({ ...f, name: f.name.trim(), ovr: parseInt(f.ovr, 10) || null, id: f.id || newCardId() })}>
+            <Ic n="check" size={15} /> บันทึก
+          </Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ช่องค้นหา + กรองประเภท/ตำแหน่ง ใช้ทั้งในแท็บคลังการ์ดและหน้าต่างเลือกการ์ด
+function useCardFilter(cards, init = {}) {
+  const [q, setQ] = useState("");
+  const [type, setType] = useState("");
+  const [pos, setPos] = useState(init.pos || "");
+  const list = useMemo(() => cards.filter(c =>
+    (!q || c.name.toLowerCase().includes(q.toLowerCase())) && (!type || c.type === type) && (!pos || c.pos === pos)
+  ).sort(byOvr), [cards, q, type, pos]);
+  const bar = (
+    <div className="mb-3 space-y-2">
+      <div className="relative">
+        <Ic n="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นชื่อนักเตะ" className={INPUT + " pl-9"} />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <select value={type} onChange={e => setType(e.target.value)} aria-label="ประเภทการ์ด" className={INPUT}>
+          <option value="">ทุกประเภท</option>
+          {CARD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={pos} onChange={e => setPos(e.target.value)} aria-label="ตำแหน่ง" className={INPUT}>
+          <option value="">ทุกตำแหน่ง</option>
+          {POSITIONS.map(x => <option key={x} value={x}>{x}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+  return { list, bar };
+}
+
+const CardRow = ({ c, teams, onClick, right }) => {
+  const t = c.teamId != null && teams.find(x => x.id === c.teamId);
+  return (
+    <button type="button" onClick={onClick} className="flex w-full min-w-0 items-center gap-3 px-3 py-2.5 text-left transition hover:bg-accent/[0.04]">
+      <span className="w-9 shrink-0 text-center font-display text-lg font-semibold"><Hl>{c.ovr || "–"}</Hl></span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-ink">{c.name}</span>
+        <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
+          <TypeBadge type={c.type} />{c.pos && <span>{c.pos}</span>}<span className="truncate">· {t ? t.name : "ทุกทีม"}</span>
+        </span>
+      </span>
+      {right}
+    </button>
+  );
+};
+
+// เลือกการ์ดให้ช่องหนึ่งในทีม: แสดงการ์ดของทีมนี้ + การ์ดที่ทุกทีมใช้ได้ · ตั้งตำแหน่งเริ่มต้นตามช่อง
+function CardPicker({ cards, teams, team, pos, taken, onPick, onClose }) {
+  const mine = cards.filter(c => c.teamId == null || c.teamId === team.id);
+  const { list, bar } = useCardFilter(mine, { pos });
+  return (
+    <Modal onClose={onClose} className="max-w-lg">
+      <ModalHead kicker={team.name + (pos ? " · ช่อง " + pos : "")} title="เลือกการ์ด" onClose={onClose} />
+      {bar}
+      {list.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-line/15 py-8 text-center text-sm text-muted">
+          {mine.length ? "ไม่มีการ์ดที่ตรงตัวกรอง ลองเปลี่ยนตำแหน่งเป็น “ทุกตำแหน่ง”" : "ทีมนี้ยังไม่มีการ์ดในคลัง เพิ่มได้ที่แท็บคลังการ์ด"}
+        </div>
+      ) : (
+        <div className="divide-y divide-line/[0.06] rounded-xl bg-sunken ring-1 ring-line/[0.06]">
+          {list.map(c => (
+            <CardRow key={c.id} c={c} teams={teams} onClick={() => onPick(c)}
+              right={taken.includes(c.id) ? <span className="shrink-0 text-[11px] text-muted">อยู่ในทีมแล้ว</span> : null} />
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function CardLibrary({ cards, teams, canEdit, onOpen, onImport }) {
+  const [team, setTeam] = useState("");
+  const scoped = team === "" ? cards : cards.filter(c => team === "all" ? c.teamId == null : c.teamId === +team);
+  const { list, bar } = useCardFilter(scoped);
+  const fileRef = useRef(null);
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {canEdit && <Btn variant="primary" onClick={() => onOpen({})}><Ic n="plus" size={14} /> เพิ่มการ์ด</Btn>}
+        {canEdit && (
+          <Btn onClick={() => fileRef.current && fileRef.current.click()}><Ic n="upload" size={13} /> นำเข้า CSV</Btn>
+        )}
+        <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden"
+          onChange={e => { const f = e.target.files[0]; if (f) onImport(f); e.target.value = ""; }} />
+      </div>
+      <select value={team} onChange={e => setTeam(e.target.value)} aria-label="ทีมเจ้าของการ์ด" className={INPUT + " mb-2"}>
+        <option value="">ทุกทีม ({cards.length} ใบ)</option>
+        <option value="all">การ์ดที่ทุกทีมใช้ได้</option>
+        {teams.map(t => <option key={t.id} value={t.id}>{t.name} ({cards.filter(c => c.teamId === t.id).length})</option>)}
+      </select>
+      {bar}
+      {list.length === 0 ? (
+        <Card className="py-12 text-center text-sm text-muted">
+          {cards.length ? "ไม่มีการ์ดที่ตรงตัวกรอง" : canEdit ? "ยังไม่มีการ์ด — กด “เพิ่มการ์ด” หรือนำเข้าไฟล์ CSV" : "ยังไม่มีการ์ดในคลัง"}
+        </Card>
+      ) : (
+        <Card className="divide-y divide-line/[0.06] overflow-hidden">
+          {list.map(c => <CardRow key={c.id} c={c} teams={teams} onClick={() => canEdit && onOpen(c)}
+            right={canEdit ? <Ic n="pencil" size={13} className="shrink-0 text-muted" /> : null} />)}
+        </Card>
+      )}
+      {canEdit && (
+        <p className="mt-3 text-xs leading-relaxed text-muted">
+          CSV: แถวแรกเป็น <code className="text-soft">name,type,pos,ovr,team</code> เช่น <code className="text-soft">R. Carlos,Epic,LB,103,NONT FC</code> · ประเภท Standard จะถูกข้าม
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -1435,6 +1682,8 @@ function ShareModal({ blob, onClose }) {
 function FriendsLeague() {
   const [teams, setTeams]     = useState(() => load("fl_teams", SEED_TEAMS));
   const [matches, setMatches] = useState(() => load("fl_matches", SEED_MATCHES));
+  const [cards, setCards]     = useState(() => load("fl_cards", []));
+  const [cardModal, setCardModal] = useState(null);
   const [users, setUsers]     = useState(() => load("fl_users", []));
   const [session, setSession] = useState(() => { const s = load("fl_session", null); return s && s.exp > Date.now() ? s : null; });
   const [theme, setTheme]     = useState(() => load("fl_theme", "light") === "dark" ? "dark" : "light");
@@ -1451,7 +1700,7 @@ function FriendsLeague() {
   const [sharing, setSharing]       = useState(false);
   // cloud: "pending" = กำลังเชื่อม claude.ai · null = โหมดเครื่องเดียว · {db, me} = ซิงก์อยู่
   const [cloud, setCloud]     = useState(HAS_CLAUDE ? "pending" : null);
-  const [synced, setSynced]   = useState({ teams: false, matches: false });
+  const [synced, setSynced]   = useState({ teams: false, matches: false, cards: false });
   const [readOnly, setReadOnly] = useState(false);
   const live = cloud && cloud !== "pending" ? cloud : null;
 
@@ -1471,7 +1720,11 @@ function FriendsLeague() {
       setMatches(s.docs.map(d => d.data()));
       setSynced(v => ({ ...v, matches: true }));
     }, () => setSynced(v => ({ ...v, matches: true })));
-    return () => { offTeams(); offMatches(); };
+    const offCards = live.db.collection("cards").onSnapshot(s => {
+      setCards(s.docs.map(d => d.data()));
+      setSynced(v => ({ ...v, cards: true }));
+    }, () => setSynced(v => ({ ...v, cards: true })));
+    return () => { offTeams(); offMatches(); offCards(); };
   }, [live]);
 
   const cloudFail = e => {
@@ -1484,8 +1737,12 @@ function FriendsLeague() {
   };
   // ทุกการแก้ทีม/นัดผ่านสองตัวนี้: เครื่องเดียว = state ธรรมดา · cloud = อัปเดตจอทันที แล้วเขียนขึ้นฐานข้อมูล
   const commitMatches = next => {
-    if (live) syncMatches(live.db, matches, next).catch(cloudFail);
+    if (live) syncCollection(live.db, "matches", matches, next).catch(cloudFail);
     setMatches(next);
+  };
+  const commitCards = next => {
+    if (live) syncCollection(live.db, "cards", cards, next).catch(cloudFail);
+    setCards(next);
   };
   const commitTeams = next => {
     if (live) syncTeams(live.db, next).catch(cloudFail);
@@ -1494,6 +1751,7 @@ function FriendsLeague() {
 
   useEffect(() => { if (!cloud) save("fl_teams", teams); }, [teams, cloud]);
   useEffect(() => { if (!cloud) save("fl_matches", matches); }, [matches, cloud]);
+  useEffect(() => { if (!cloud) save("fl_cards", cards); }, [cards, cloud]);
   useEffect(() => save("fl_users", users), [users]);
   useEffect(() => {
     if (session) save("fl_session", session);
@@ -1595,9 +1853,28 @@ function FriendsLeague() {
     setSquadId(null);
   };
 
+  const saveCard = c => {
+    commitCards(cards.some(x => x.id === c.id) ? cards.map(x => x.id === c.id ? c : x) : [...cards, c]);
+    setCardModal(null);
+  };
+  const deleteCard = id => { commitCards(cards.filter(c => c.id !== id)); setCardModal(null); };
+  const importCards = file => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const r = parseCardsCsv(String(reader.result), teams);
+      if (r.error) return alert(r.error);
+      if (!r.cards.length) return alert("ไม่พบการ์ดที่นำเข้าได้" + (r.skipped ? " (ข้าม " + r.skipped + " แถว: ไม่มีชื่อ หรือเป็น Standard/ประเภทที่ไม่รู้จัก)" : ""));
+      commitCards([...cards, ...r.cards]);
+      alert("นำเข้า " + r.cards.length + " ใบ" + (r.skipped ? " · ข้าม " + r.skipped + " แถว (ไม่มีชื่อ หรือเป็น Standard/ประเภทที่ไม่รู้จัก)" : ""));
+    };
+    reader.readAsText(file);
+  };
+
   const deleteTeam = id => {
     commitTeams(teams.filter(t => t.id !== id));
     commitMatches(matches.filter(m => m.home !== id && m.away !== id));
+    // การ์ดของทีมที่ถูกลบ → กลับเป็นการ์ดที่ทุกทีมใช้ได้ ไม่หายไปเฉย ๆ
+    if (cards.some(c => c.teamId === id)) commitCards(cards.map(c => c.teamId === id ? { ...c, teamId: null } : c));
     setTeamModal(null);
   };
 
@@ -1622,7 +1899,7 @@ function FriendsLeague() {
 
   /* ── Export / Import JSON (เฉพาะทีม/นัด ไม่รวมบัญชีผู้ใช้) ── */
   const exportData = () => {
-    const blob = new Blob([JSON.stringify({ teams, matches }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ teams, matches, cards }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "friends-league.json";
@@ -1639,6 +1916,7 @@ function FriendsLeague() {
         const d = JSON.parse(reader.result);
         if (d.teams)   commitTeams(d.teams);
         if (d.matches) commitMatches(d.matches);
+        if (d.cards)   commitCards(d.cards);
       } catch (e) { alert("ไฟล์ไม่ถูกต้อง"); }
     };
     reader.readAsText(file);
@@ -1651,6 +1929,7 @@ function FriendsLeague() {
     { key:"matches",   label:"โปรแกรม/ผล", icon:"calendar" },
     { key:"scorers",   label:"ดาวซัลโว",   icon:"target" },
     { key:"teams",     label:"ทีมทั้งหมด", icon:"users" },
+    { key:"cards",     label:"คลังการ์ด",  icon:"cards" },
   ];
   const rounds = [...new Set(matches.map(m => m.round))].sort((a, b) => a - b);
   const matchRow = m => (
@@ -1668,7 +1947,7 @@ function FriendsLeague() {
     { l:"จ่าฝูง",    v: (done.length && standings[0] && standings[0].team.name.split(" ")[0]) || "-", icon:"crown", c:"bg-amber-500/15 text-amber-600 dark:text-amber-300" },
   ];
 
-  if (cloud === "pending" || (live && !(synced.teams && synced.matches))) {
+  if (cloud === "pending" || (live && !(synced.teams && synced.matches && synced.cards))) {
     return <div className="grid min-h-screen place-content-center justify-items-center gap-4 bg-page text-sm text-muted"><div className="boot-ring"></div><div>กำลังซิงก์ข้อมูลลีก…</div></div>;
   }
 
@@ -1895,6 +2174,14 @@ function FriendsLeague() {
           </div>
         )}
 
+        {/* ═══ CARDS ═══ */}
+        {tab === "cards" && (
+          <div className="fl-enter">
+            <SectionTitle icon="cards" kicker="Card Library" title="คลังการ์ด" />
+            <CardLibrary cards={cards} teams={teams} canEdit={canEdit} onOpen={setCardModal} onImport={importCards} />
+          </div>
+        )}
+
         {/* ═══ TEAMS ═══ */}
         {tab === "teams" && (
           <div className="fl-enter">
@@ -1942,8 +2229,9 @@ function FriendsLeague() {
           onEdit={t => { setProfileId(null); setTeamModal(t); }} onSquad={t => setSquadId(t.id)} onClose={() => setProfileId(null)} />
       )}
       {squadId != null && teams.some(t => t.id === squadId) && (
-        <SquadModal team={teams.find(t => t.id === squadId)} onClose={() => setSquadId(null)} onSave={saveSquad} />
+        <SquadModal team={teams.find(t => t.id === squadId)} teams={teams} cards={cards} onClose={() => setSquadId(null)} onSave={saveSquad} />
       )}
+      {cardModal && <CardModal card={cardModal} teams={teams} onClose={() => setCardModal(null)} onSave={saveCard} onDelete={deleteCard} />}
       {scheduleMatch && <ScheduleModal match={scheduleMatch} teams={teams} onClose={() => setScheduleMatch(null)} onSave={saveSchedule} />}
       {fixtureOpen && (
         <FixtureModal teams={teams} matchCount={matches.length} doneCount={done.length}
