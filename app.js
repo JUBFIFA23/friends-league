@@ -739,6 +739,7 @@ function ResultModal({ match, teams, onClose, onSave }) {
     setHs(events.filter(e => e.type === "goal" && e.teamId === match.home).length);
     setAs(events.filter(e => e.type === "goal" && e.teamId === match.away).length);
   };
+  const listId = id => "squad-" + match.id + "-" + id;
   const SCORE = "h-12 w-12 rounded-xl bg-surface text-center font-display text-xl font-semibold text-accent ring-1 ring-line/10 outline-none focus:ring-2 focus:ring-accent/60 sm:h-14 sm:w-14 sm:text-2xl";
 
   return (
@@ -792,14 +793,19 @@ function ResultModal({ match, teams, onClose, onSave }) {
               className="grid place-items-center rounded-lg text-muted hover:bg-loss/10 hover:text-loss sm:order-last">
               <Ic n="x" size={15} />
             </button>
-            <input value={e.player} onChange={ev => upd(i, "player", ev.target.value)}
+            <input value={e.player} onChange={ev => upd(i, "player", ev.target.value)} list={listId(e.teamId)}
               placeholder="ชื่อนักเตะ" className={INPUT + " bg-surface"} />
-            <input value={e.assist || ""} onChange={ev => upd(i, "assist", ev.target.value)}
+            <input value={e.assist || ""} onChange={ev => upd(i, "assist", ev.target.value)} list={listId(e.teamId)}
               placeholder={e.type === "goal" ? "แอสซิสต์" : "—"} disabled={e.type !== "goal"}
               className={INPUT + " bg-surface"} />
           </div>
         ))}
       </div>
+
+      {/* ชื่อนักเตะจากรายชื่อทีม ให้เลือกได้ตอนพิมพ์ */}
+      {[home, away].filter(Boolean).map(t => (
+        <datalist key={t.id} id={listId(t.id)}>{squadNames(t).map(n => <option key={n} value={n} />)}</datalist>
+      ))}
 
       <div className="mt-6 flex justify-end gap-3">
         <Btn onClick={onClose}>ยกเลิก</Btn>
@@ -838,6 +844,127 @@ function TeamModal({ team, onClose, onSave, onDelete }) {
           <Btn onClick={onClose}>ยกเลิก</Btn>
           <Btn variant="primary" onClick={() => f.name && onSave(f)}><Ic n="check" size={15} /> บันทึก</Btn>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ══════════════════════════ SQUAD (ตัวจริง 11 · สำรอง 12) ══════════════════════════
+   team.squad = { formation, starters: [{name, num}] ×11 (ตำแหน่งมาจากแผน), subs: [{name, num, pos}] ×12 }
+   พิกัดในแผน = [ตำแหน่ง, x%, y%] บนสนามแนวตั้ง (เกมอยู่ล่าง ทีมบุกขึ้นบน) */
+const FORMATIONS = {
+  "4-3-3":   [["GK",50,90],["LB",14,70],["CB",37,75],["CB",63,75],["RB",86,70],["CMF",26,50],["CMF",50,54],["CMF",74,50],["LWF",17,24],["CF",50,18],["RWF",83,24]],
+  "4-4-2":   [["GK",50,90],["LB",14,70],["CB",37,75],["CB",63,75],["RB",86,70],["LMF",14,46],["CMF",38,50],["CMF",62,50],["RMF",86,46],["CF",37,20],["CF",63,20]],
+  "4-2-3-1": [["GK",50,90],["LB",14,70],["CB",37,75],["CB",63,75],["RB",86,70],["DMF",37,57],["DMF",63,57],["LMF",17,35],["AMF",50,38],["RMF",83,35],["CF",50,16]],
+  "3-5-2":   [["GK",50,90],["CB",25,74],["CB",50,77],["CB",75,74],["LMF",11,46],["CMF",32,48],["DMF",50,58],["CMF",68,48],["RMF",89,46],["CF",37,20],["CF",63,20]],
+  "5-3-2":   [["GK",50,90],["LB",10,62],["CB",30,75],["CB",50,77],["CB",70,75],["RB",90,62],["CMF",27,46],["CMF",50,50],["CMF",73,46],["CF",37,20],["CF",63,20]],
+};
+const POSITIONS = ["GK","CB","LB","RB","DMF","CMF","LMF","RMF","AMF","LWF","RWF","SS","CF"];
+const N_START = 11, N_SUB = 12;
+const fill = (list, n, blank) => Array.from({ length: n }, (_, i) => ({ ...blank, ...((list || [])[i] || {}) }));
+const squadOf = t => {
+  const s = (t && t.squad) || {};
+  return {
+    formation: FORMATIONS[s.formation] ? s.formation : "4-3-3",
+    starters: fill(s.starters, N_START, { name: "", num: "" }),
+    subs: fill(s.subs, N_SUB, { name: "", num: "", pos: "" }),
+  };
+};
+const filled = list => list.filter(p => (p.name || "").trim()).length;
+const squadNames = t => { const s = squadOf(t); return [...s.starters, ...s.subs].map(p => (p.name || "").trim()).filter(Boolean); };
+// ตัวเลขบนเสื้อ: ขาว/ดำ ตามความสว่างของสีชุด
+const inkOn = hex => {
+  if (!/^#[0-9a-f]{6}$/i.test(hex || "")) return "#FFFFFF";
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160 ? "#0F172A" : "#FFFFFF";
+};
+
+function Pitch({ team }) {
+  const s = squadOf(team);
+  return (
+    <div className="fl-pitch relative mx-auto aspect-[3/4] w-full max-w-sm overflow-hidden rounded-2xl ring-1 ring-line/10">
+      {/* เส้นสนาม */}
+      <div className="absolute inset-3 rounded-md border border-white/40" />
+      <div className="absolute inset-x-3 top-1/2 border-t border-white/40" />
+      <div className="absolute left-1/2 top-1/2 h-[22%] w-[29%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/40" />
+      <div className="absolute bottom-3 left-1/2 h-[14%] w-[54%] -translate-x-1/2 border border-b-0 border-white/40" />
+      <div className="absolute left-1/2 top-3 h-[14%] w-[54%] -translate-x-1/2 border border-t-0 border-white/40" />
+      {FORMATIONS[s.formation].map(([pos, x, y], i) => {
+        const p = s.starters[i];
+        return (
+          <div key={i} className="absolute flex w-[22%] -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{ left: x + "%", top: y + "%" }}>
+            <span className="grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold shadow ring-2 ring-white/70 sm:h-8 sm:w-8"
+              style={{ background: team.kit, color: inkOn(team.kit) }}>{p.num || pos}</span>
+            <span className="mt-0.5 max-w-full truncate rounded bg-black/45 px-1 text-[10px] leading-tight text-white">{p.name || pos}</span>
+          </div>
+        );
+      })}
+      <span className="absolute left-4 top-4 rounded-md bg-black/40 px-1.5 py-0.5 text-[11px] font-medium text-white">{s.formation}</span>
+    </div>
+  );
+}
+
+function Bench({ team }) {
+  const subs = squadOf(team).subs;
+  return (
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+      {subs.map((p, i) => (
+        <div key={i} className={"flex min-w-0 items-center gap-2 rounded-lg bg-sunken px-2 py-1.5 text-xs ring-1 ring-line/[0.06] " + (p.name ? "" : "opacity-50")}>
+          <span className="w-5 shrink-0 text-center font-display font-semibold text-accent">{p.num || "–"}</span>
+          <span className="min-w-0 flex-1 truncate text-ink">{p.name || "ว่าง"}</span>
+          {p.pos && <span className="shrink-0 text-[10px] text-muted">{p.pos}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SquadModal({ team, onClose, onSave }) {
+  const [s, setS] = useState(() => squadOf(team));
+  const [tab, setTab] = useState("start");
+  const setRow = (k, i, f, v) => setS({ ...s, [k]: s[k].map((p, j) => j === i ? { ...p, [f]: v } : p) });
+  const slots = FORMATIONS[s.formation];
+  const BOX = INPUT.replace("w-full ", "");   // ช่องเล็ก: ไม่เอา w-full มาชนกับความกว้างที่กำหนดเอง
+  const NUM = BOX + " w-14 shrink-0 bg-surface px-2 text-center";
+
+  return (
+    <Modal onClose={onClose} className="max-w-xl">
+      <ModalHead kicker={team.name} title="จัดนักเตะ" onClose={onClose} />
+      <Field label="แผนการเล่น">
+        <select value={s.formation} onChange={e => setS({ ...s, formation: e.target.value })} className={INPUT}>
+          {Object.keys(FORMATIONS).map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
+      </Field>
+      <div className="mt-4">
+        <Segmented value={tab} onChange={setTab}
+          items={[["start", "ตัวจริง " + filled(s.starters) + "/" + N_START], ["sub", "สำรอง " + filled(s.subs) + "/" + N_SUB]]} />
+      </div>
+
+      <div className="space-y-2">
+        {tab === "start" ? s.starters.map((p, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="w-12 shrink-0 rounded-lg bg-accent/10 py-2 text-center text-[11px] font-semibold text-accent">{slots[i][0]}</span>
+            <input value={p.name} onChange={e => setRow("starters", i, "name", e.target.value)} placeholder="ชื่อนักเตะ" className={INPUT + " min-w-0 bg-surface"} />
+            <input value={p.num} onChange={e => setRow("starters", i, "num", e.target.value.replace(/\D/g, "").slice(0, 2))}
+              inputMode="numeric" placeholder="เบอร์" aria-label="เบอร์เสื้อ" className={NUM} />
+          </div>
+        )) : s.subs.map((p, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <select value={p.pos} onChange={e => setRow("subs", i, "pos", e.target.value)} aria-label="ตำแหน่ง"
+              className={BOX + " w-[92px] shrink-0 bg-surface px-2 text-xs"}>
+              <option value="">ตำแหน่ง</option>
+              {POSITIONS.map(x => <option key={x} value={x}>{x}</option>)}
+            </select>
+            <input value={p.name} onChange={e => setRow("subs", i, "name", e.target.value)} placeholder={"สำรองคนที่ " + (i + 1)} className={INPUT + " min-w-0 bg-surface"} />
+            <input value={p.num} onChange={e => setRow("subs", i, "num", e.target.value.replace(/\D/g, "").slice(0, 2))}
+              inputMode="numeric" placeholder="เบอร์" aria-label="เบอร์เสื้อ" className={NUM} />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 flex justify-end gap-3">
+        <Btn onClick={onClose}>ยกเลิก</Btn>
+        <Btn variant="primary" onClick={() => onSave(team.id, s)}><Ic n="check" size={15} /> บันทึก</Btn>
       </div>
     </Modal>
   );
@@ -1101,7 +1228,7 @@ function CloudAccountModal({ user, onClose }) {
 }
 
 /* ══════════════════════════ TEAM PROFILE ══════════════════════════ */
-function TeamProfile({ team, rank, row, matches, teams, scorers, canEdit, onEdit, onClose }) {
+function TeamProfile({ team, rank, row, matches, teams, scorers, canEdit, onEdit, onSquad, onClose }) {
   const tier = tierOf(rank, row);
   const r = row || { P:0, W:0, D:0, L:0, GF:0, GA:0, GD:0, PTS:0, form:[] };
   const mine = matches.filter(m => m.home === team.id || m.away === team.id).sort(byPlayOrder);
@@ -1137,6 +1264,23 @@ function TeamProfile({ team, rank, row, matches, teams, scorers, canEdit, onEdit
             <div className="flex gap-1">
               {r.form.length ? r.form.slice(-5).map((f, k) => <FormPill key={k} r={f} />) : <span className="text-xs text-muted">—</span>}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* นักเตะ: ตัวจริงบนสนาม + ตัวสำรอง */}
+      <div className="mt-6">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <span className="text-sm font-medium text-soft">
+            ตัวจริง {filled(squadOf(team).starters)}/{N_START} <span className="text-muted">·</span> สำรอง {filled(squadOf(team).subs)}/{N_SUB}
+          </span>
+          {canEdit && <Btn onClick={() => onSquad(team)} className="py-1.5"><Ic n="users" size={13} /> จัดนักเตะ</Btn>}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <Pitch team={team} />
+          <div>
+            <div className="mb-2 text-xs text-muted">ตัวสำรอง</div>
+            <Bench team={team} />
           </div>
         </div>
       </div>
@@ -1301,6 +1445,7 @@ function FriendsLeague() {
   const [teamModal, setTeamModal]     = useState(null);
   const [profileId, setProfileId]     = useState(null);
   const [scheduleMatch, setScheduleMatch] = useState(null);
+  const [squadId, setSquadId]             = useState(null);
   const [fixtureOpen, setFixtureOpen]     = useState(false);
   const [shareBlob, setShareBlob]   = useState(null);
   const [sharing, setSharing]       = useState(false);
@@ -1443,6 +1588,11 @@ function FriendsLeague() {
       ? teams.map(t => t.id === f.id ? f : t)
       : [...teams, { ...f, id: Math.max(0, ...teams.map(t => t.id)) + 1 }]);
     setTeamModal(null);
+  };
+
+  const saveSquad = (id, squad) => {
+    commitTeams(teams.map(t => t.id === id ? { ...t, squad } : t));
+    setSquadId(null);
   };
 
   const deleteTeam = id => {
@@ -1789,7 +1939,10 @@ function FriendsLeague() {
       {profileTeam && (
         <TeamProfile team={profileTeam} rank={rankOf(profileTeam.id)} row={rowOf(profileTeam.id)}
           matches={matches} teams={teams} scorers={scorers} canEdit={isAdmin}
-          onEdit={t => { setProfileId(null); setTeamModal(t); }} onClose={() => setProfileId(null)} />
+          onEdit={t => { setProfileId(null); setTeamModal(t); }} onSquad={t => setSquadId(t.id)} onClose={() => setProfileId(null)} />
+      )}
+      {squadId != null && teams.some(t => t.id === squadId) && (
+        <SquadModal team={teams.find(t => t.id === squadId)} onClose={() => setSquadId(null)} onSave={saveSquad} />
       )}
       {scheduleMatch && <ScheduleModal match={scheduleMatch} teams={teams} onClose={() => setScheduleMatch(null)} onSave={saveSchedule} />}
       {fixtureOpen && (

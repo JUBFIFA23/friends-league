@@ -193,3 +193,8 @@ input[type=color]::-webkit-color-swatch {
 @media (prefers-reduced-motion: reduce) {
   *, .boot-ring { animation: none !important; transition: none !important; }
 }
+
+/* ══════════════════ PITCH (หน้านักเตะ) ══════════════════ */
+:root, [data-theme="light"] { --pitch: repeating-linear-gradient(180deg, #2E8B4F 0 10%, #2A7F48 10% 20%); }
+[data-theme="dark"]         { --pitch: repeating-linear-gradient(180deg, #1C5A34 0 10%, #18502E 10% 20%); }
+.fl-pitch { background: var(--pitch); }
