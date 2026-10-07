@@ -2026,9 +2026,34 @@ function Pitch({ team, cards = false, onCard }) {
   );
 }
 
-/* ══════════════════════════ CARD VIEWER (กดการ์ดบนสนาม → ดูใบใหญ่) ══════════════════════════ */
+/* ══════════════════════════ PLAYER VIEWER (แตะนักเตะ → การ์ดใบใหญ่ + สถิติ + ผลงานรายนัด) ══════════════════════════ */
+// ตำแหน่งในแผนที่นักเตะยืนอยู่ (ตัวจริงเท่านั้น · สำรอง = null)
+const slotOf = (team, pid) => { const t = withSquad(team); const i = t.lineup.indexOf(pid); return i >= 0 ? FORMATIONS[t.formation][i].pos : null; };
+
+// ผลงานรายนัดของนักเตะ 1 คน ใหม่สุดก่อน · นับว่า "ลงเล่น" แบบเดียวกับ computePlayerStats
+// (มีชื่อในผลงานนักเตะ หรือในประตู/แอสซิสต์/ใบ · ข้อมูลเก่าที่ไม่มี id เทียบด้วยชื่อ)
+function playerLog(teamId, player, matches, teams) {
+  const nm = (player.name || "").trim().toLowerCase();
+  const isMe = (pid, name) => pid ? pid === player.id : !!nm && (name || "").trim().toLowerCase() === nm;
+  const nameOf = id => { const t = teams.find(x => x.id === id); return t ? t.name : "—"; };
+  return matches.filter(m => m.status === "done" && (m.home === teamId || m.away === teamId)).sort(byPlayOrder).reverse()
+    .map(m => {
+      const ev = (m.events || []).filter(e => String(e.teamId) === String(teamId));
+      const count = type => ev.filter(e => e.type === type && isMe(e.playerId, e.player)).length;
+      const G = count("goal"), Y = count("yellow"), R = count("red");
+      const A = ev.filter(e => e.type === "goal" && (e.assistId || e.assist) && isMe(e.assistId, e.assist)).length;
+      const pt = m.perf && m.perf[teamId];
+      const played = !!pt && typeof pt === "object" && Object.prototype.hasOwnProperty.call(pt, player.id);
+      if (!played && !G && !A && !Y && !R) return null;
+      const v = played ? pt[player.id] : null;
+      const home = m.home === teamId, gf = home ? m.hs : m.as, ga = home ? m.as : m.hs;
+      return { m, home, gf, ga, opp: nameOf(home ? m.away : m.home), r: v && typeof v.r === "number" ? v.r : null, G, A, Y, R,
+               motm: !!m.motm && String(m.motm.teamId) === String(teamId) && isMe(m.motm.playerId, m.motm.n) };
+    }).filter(Boolean);
+}
+
 // onSetImage (เฉพาะแอดมิน/ผู้จัดการทีมนั้น) → ใส่/เปลี่ยน/ลบรูปการ์ดได้ตรงนี้เลย บันทึกทันที
-function CardViewer({ p, team, slotPos, stats, onClose, onSetImage }) {
+function CardViewer({ p, team, slotPos, stats, matches, teams, onClose, onSetImage }) {
   const { images, putImage } = useContext(ImgContext);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -2040,37 +2065,100 @@ function CardViewer({ p, team, slotPos, stats, onClose, onSetImage }) {
     catch (e) { setErr(e.message || "อัปโหลดรูปไม่สำเร็จ"); }
     finally { setBusy(false); }
   };
+  const log = useMemo(() => playerLog(team.id, p, matches || [], teams || []), [team.id, p, matches, teams]);
   const s = stats || {};
-  const facts = [["นัด", s.apps || 0], ["ประตู", s.G || 0], ["แอสซิสต์", s.A || 0], ["เฉลี่ย", fmtAvg(s.avg)], ["MOTM", s.motm || 0]];
+  const G = s.G || 0, A = s.A || 0;
+  // [ชื่อ, ค่า, เน้นสี]
+  const facts = [["นัดที่ลงเล่น", s.apps || 0], ["ประตู", G], ["แอสซิสต์", A], ["ยิง+แอส", G + A],
+                 ["คะแนนเฉลี่ย", fmtAvg(s.avg), true], ["MOTM", s.motm || 0], ["ใบเหลือง", s.Y || 0], ["ใบแดง", s.R || 0]];
+  const role = p.former ? "อดีตนักเตะ" : p.starter ? "ตัวจริง" + (slotPos ? " · ยืน " + slotPos : "") : p.starter === false ? "สำรอง" : "";
+  const box = "rounded-lg bg-sunken px-2 py-2 text-center ring-1 ring-line/15";
   return (
-    <Modal onClose={onClose} className="max-w-sm">
-      <ModalHead kicker={team.name + (slotPos ? " · ยืน " + slotPos : "")} title={p.name || "—"} onClose={onClose} />
-      <PlayerCard p={p} pos={slotPos || p.pos} kit={team.kit} className="mx-auto w-48" />
-      {onSetImage && (
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          <label className={"ef-btn ef-btn-primary inline-flex cursor-pointer items-center gap-2 px-5 py-2 text-sm " + (busy ? "pointer-events-none opacity-60" : "")}>
-            <Ic n="image" size={14} /> {busy ? "กำลังใส่รูป…" : has ? "เปลี่ยนรูปการ์ด" : "ใส่รูปการ์ด"}
-            <input type="file" accept="image/*" className="sr-only" disabled={busy} aria-label={(has ? "เปลี่ยนรูปการ์ด " : "ใส่รูปการ์ด ") + who}
-              onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) upload(f); }} />
-          </label>
-          {has && !busy && <Btn variant="danger" onClick={() => onSetImage(p.id, "")} aria-label={"ลบรูปการ์ด " + who}><Ic n="trash" size={13} /> ลบรูป</Btn>}
+    <Modal onClose={onClose} className="max-w-2xl">
+      <ModalHead kicker={team.name + (role ? " · " + role : "")} title={p.name || "—"} onClose={onClose} />
+      <div className="grid gap-5 sm:grid-cols-[192px_minmax(0,1fr)]">
+        <div>
+          <PlayerCard p={p} pos={slotPos || p.pos} kit={team.kit} className="mx-auto w-48" />
+          {onSetImage && (
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <label className={"ef-btn ef-btn-primary inline-flex cursor-pointer items-center gap-2 px-4 py-1.5 text-xs " + (busy ? "pointer-events-none opacity-60" : "")}>
+                <Ic n="image" size={13} /> {busy ? "กำลังใส่รูป…" : has ? "เปลี่ยนรูปการ์ด" : "ใส่รูปการ์ด"}
+                <input type="file" accept="image/*" className="sr-only" disabled={busy} aria-label={(has ? "เปลี่ยนรูปการ์ด " : "ใส่รูปการ์ด ") + who}
+                  onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) upload(f); }} />
+              </label>
+              {has && !busy && (
+                <button type="button" onClick={() => onSetImage(p.id, "")} aria-label={"ลบรูปการ์ด " + who}
+                  className="ef-btn ef-btn-danger inline-flex items-center gap-2 px-4 py-1.5 text-xs transition-transform active:scale-[0.97]">
+                  <Ic n="trash" size={12} /> ลบรูป
+                </button>
+              )}
+            </div>
+          )}
+          {err && <div className="mt-2"><Note>{err}</Note></div>}
         </div>
-      )}
-      {err && <div className="mt-2"><Note>{err}</Note></div>}
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-        <PosBadge pos={p.pos} />
-        <CardBadge card={p.card} />
-        {p.ovr !== "" && p.ovr != null && <span className="font-display text-lg font-bold italic text-ink">OVR {p.ovr}</span>}
-        {efhubHref(p.efhub) && <a href={efhubHref(p.efhub)} target="_blank" rel="noopener noreferrer" className="text-xs text-link hover:underline">ดูใน EFHUB ↗</a>}
-      </div>
-      {slotPos && offPosition(p.pos, slotPos) && <p className="mt-2 text-center text-xs text-loss">เล่นนอกตำแหน่ง: ตำแหน่งจริง {p.pos} แต่ยืน {slotPos}</p>}
-      <div className="mt-4 grid grid-cols-5 gap-1.5 text-center">
-        {facts.map(([l, v]) => (
-          <div key={l} className="rounded-lg bg-sunken px-1 py-2 ring-1 ring-line/15">
-            <div className="text-[10px] text-muted">{l}</div>
-            <div className="font-display text-base font-bold italic text-ink">{v}</div>
+
+        <div className="min-w-0">
+          {/* ระดับการ์ด · OVR · ตำแหน่ง */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className={box}>
+              <div className="text-[10px] text-muted">ระดับการ์ด</div>
+              <div className="mt-1.5 flex justify-center">{p.card ? <CardBadge card={p.card} /> : <span className="text-sm text-muted">–</span>}</div>
+            </div>
+            <div className={box}>
+              <div className="text-[10px] text-muted">OVR</div>
+              <div className="font-display text-2xl font-bold italic leading-tight text-accent">{p.ovr !== "" && p.ovr != null ? p.ovr : "–"}</div>
+            </div>
+            <div className={box}>
+              <div className="text-[10px] text-muted">ตำแหน่ง</div>
+              <div className="mt-1.5 flex justify-center">{p.pos ? <PosBadge pos={p.pos} /> : <span className="text-sm text-muted">–</span>}</div>
+            </div>
           </div>
-        ))}
+          {slotPos && p.pos && offPosition(p.pos, slotPos) && <p className="mt-2 text-center text-xs text-loss">เล่นนอกตำแหน่ง: ตำแหน่งจริง {p.pos} แต่ยืน {slotPos}</p>}
+
+          {/* สถิติรวมทั้งฤดูกาล */}
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
+            {facts.map(([l, v, hot]) => (
+              <div key={l} className={box + " px-1"}>
+                <div className="text-[10px] text-muted">{l}</div>
+                <div className={"font-display text-lg font-bold italic " + (hot ? "text-accent" : "text-ink")}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* ผลงานรายนัด (ใหม่สุดก่อน) */}
+          <div className="mt-4">
+            <div className={LABEL + " mb-1.5"}>ผลงานรายนัด</div>
+            {log.length === 0 ? (
+              <div className="rounded-lg bg-sunken px-3 py-3 text-center text-xs text-muted ring-1 ring-line/15">ยังไม่ได้ลงเล่น</div>
+            ) : (
+              <div className="divide-y divide-line/10 rounded-lg bg-sunken ring-1 ring-line/15">
+                {log.map(x => (
+                  <div key={x.m.id} className="flex items-center gap-2 px-3 py-1.5 text-xs tabular-nums">
+                    <div className="min-w-0 flex-1 leading-tight">
+                      <div className="truncate text-ink">{x.opp}</div>
+                      <div className="text-[10px] text-muted">สัปดาห์ {x.m.round} · {x.home ? "เหย้า" : "เยือน"}</div>
+                    </div>
+                    <span className="shrink-0 font-display font-bold italic text-ink">{x.gf}-{x.ga}</span>
+                    <FormPill r={x.gf > x.ga ? "W" : x.gf < x.ga ? "L" : "D"} />
+                    <span className="flex min-w-[2.5rem] shrink-0 items-center justify-end gap-1 text-[11px]">
+                      {x.G > 0 && <span title={"ยิง " + x.G + " ประตู"}>⚽{x.G > 1 ? x.G : ""}</span>}
+                      {x.A > 0 && <span title={"แอสซิสต์ " + x.A} className="font-semibold text-link">A{x.A > 1 ? x.A : ""}</span>}
+                      {x.Y > 0 && <span title="ใบเหลือง">🟨</span>}
+                      {x.R > 0 && <span title="ใบแดง">🟥</span>}
+                      {x.motm && <span title="ผู้เล่นยอดเยี่ยม (MOTM)" className="text-accent">★</span>}
+                    </span>
+                    <span title="คะแนนนัดนี้" className={"w-8 shrink-0 text-right font-display text-sm font-bold italic " + (x.r != null && x.r >= 8 ? "text-accent" : "text-ink")}>
+                      {x.r != null ? x.r.toFixed(1) : "–"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {efhubHref(p.efhub) && (
+            <a href={efhubHref(p.efhub)} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-xs text-link hover:underline">ดูการ์ดใน EFHUB ↗</a>
+          )}
+        </div>
       </div>
     </Modal>
   );
@@ -2107,10 +2195,15 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
   // เก็บแค่ id → หน้าดูการ์ดใช้ข้อมูลล่าสุดเสมอ (ใส่รูปแล้วเห็นทันที)
   const [viewing, setViewing] = useState(null);
   const vp = viewing && t.players.find(x => x.id === viewing.id);
+  const openPlayer = p => setViewing({ id: p.id, pos: slotOf(team, p.id) });
+  // แถวนักเตะที่มีชื่อ → กดเพื่อดูการ์ด + สถิติ + ผลงานรายนัด
   const playerRow = p => {
     const s = st(p);
+    const tap = p.name ? { role: "button", tabIndex: 0, "aria-label": "ดูข้อมูลนักเตะ " + p.name, onClick: () => openPlayer(p),
+      onKeyDown: e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openPlayer(p); } } } : {};
     return (
-      <div key={p.id} className="grid grid-cols-[38px_1fr_28px_repeat(4,30px)] items-center gap-1.5 px-3 py-1.5 text-sm tabular-nums">
+      <div key={p.id} {...tap} className={"grid grid-cols-[38px_1fr_28px_repeat(4,30px)] items-center gap-1.5 px-3 py-1.5 text-sm tabular-nums " +
+        (p.name ? "cursor-pointer rounded-lg outline-none transition hover:bg-line/[0.07] focus-visible:ring-2 focus-visible:ring-accent" : "")}>
         <PosBadge pos={p.pos} />
         <span className="flex min-w-0 items-center gap-1.5">
           {p.img && images[p.img] && (
@@ -2210,12 +2303,13 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
       </div>
       {vp && (
         <CardViewer p={vp} team={team} slotPos={viewing.pos} stats={statsByKey[team.id + "|" + vp.id]}
-          onSetImage={onSetImage} onClose={() => setViewing(null)} />
+          matches={matches} teams={teams} onSetImage={onSetImage} onClose={() => setViewing(null)} />
       )}
 
       <div className="mt-6">
         <div>
           <SubHead>รายชื่อนักเตะ ({namedPlayers(team).length}/23)</SubHead>
+          <p className="-mt-2 mb-2 text-xs text-muted">กดที่นักเตะเพื่อดูการ์ด สถิติ และผลงานรายนัด</p>
           <div className="rounded-xl bg-sunken ring-1 ring-line/15">
             {head}
             <div className="px-3 pt-1 text-[11px] font-semibold text-accent">ตัวจริง</div>
@@ -2460,10 +2554,18 @@ const PLAYER_SORTS = {
   motm: { label: "MOTM",       fn: (a, b) => b.motm - a.motm || (b.avg || 0) - (a.avg || 0), keep: s => s.motm > 0 },
 };
 
-function PlayersTab({ stats }) {
+// imageSetter(team) → ฟังก์ชันใส่รูปการ์ด ถ้าคนที่ล็อกอินแก้ทีมนั้นได้ (ไม่งั้น null)
+function PlayersTab({ stats, matches, teams, imageSetter }) {
   const [sort, setSort] = useState("G");
   const rows = useMemo(() => stats.filter(PLAYER_SORTS[sort].keep).sort(PLAYER_SORTS[sort].fn), [stats, sort]);
   const hi = k => k === sort ? "text-accent" : "";
+  // กดแถว → หน้าข้อมูลนักเตะ (หาจาก stats ทุกครั้ง → ข้อมูลล่าสุดเสมอ)
+  // อดีตนักเตะ / ข้อมูลเก่าที่มีแค่ชื่อ → ใช้ข้อมูลจากสถิติแทน (ใส่รูปไม่ได้)
+  const [openKey, setOpenKey] = useState(null);
+  const cur = openKey && stats.find(s => s.key === openKey);
+  const live = cur && cur.team && !cur.former && cur.playerId ? (cur.team.players || []).find(p => p.id === cur.playerId) : null;
+  const curP = live || (cur && { id: cur.playerId || cur.key, name: cur.name, pos: cur.pos, card: cur.card, ovr: cur.ovr, efhub: cur.efhub, img: "", former: cur.former });
+  const open = s => setOpenKey(s.key);
   return (
     <div className="fl-enter">
       <SectionTitle icon="target" kicker="Player Stats" title="สถิตินักเตะ" />
@@ -2482,7 +2584,9 @@ function PlayersTab({ stats }) {
           </div>
           {rows.length === 0 && <div className="py-12 text-center text-sm text-muted">ยังไม่มีข้อมูล</div>}
           {rows.map((s, i) => (
-            <div key={s.key} className={"grid grid-cols-[40px_1fr_repeat(7,44px)] items-center gap-2 px-4 py-3 text-sm tabular-nums transition hover:bg-line/[0.05] " + (i < rows.length - 1 ? "border-b border-line/10" : "")}>
+            <div key={s.key} role="button" tabIndex={0} aria-label={"ดูข้อมูลนักเตะ " + s.name} onClick={() => open(s)}
+              onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(s); } }}
+              className={"grid cursor-pointer grid-cols-[40px_1fr_repeat(7,44px)] items-center gap-2 px-4 py-3 text-sm tabular-nums outline-none transition hover:bg-line/[0.05] focus-visible:bg-line/[0.08] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent " + (i < rows.length - 1 ? "border-b border-line/10" : "")}>
               <div className={"font-display text-base font-bold italic " + (i === 0 ? "text-accent" : "text-faint")}>{i === 0 ? "★" : i + 1}</div>
               <div className="flex min-w-0 items-center gap-2.5">
                 {s.pos ? <PosBadge pos={s.pos} /> : <span className="ef-pos bg-line/15 text-muted">—</span>}
@@ -2506,7 +2610,11 @@ function PlayersTab({ stats }) {
           ))}
         </div>
       </Card>
-      <p className="mt-3 text-xs text-muted">นัด = ลงเล่น · เฉลี่ย = คะแนนเฉลี่ยจากนัดที่แอดมิน/กรรมการให้คะแนน · MOTM = ผู้เล่นยอดเยี่ยมประจำนัด</p>
+      <p className="mt-3 text-xs text-muted">กดที่นักเตะเพื่อดูการ์ดและผลงานรายนัด · นัด = ลงเล่น · เฉลี่ย = คะแนนเฉลี่ยจากนัดที่แอดมิน/กรรมการให้คะแนน · MOTM = ผู้เล่นยอดเยี่ยมประจำนัด</p>
+      {cur && cur.team && (
+        <CardViewer p={curP} team={cur.team} slotPos={live ? slotOf(cur.team, live.id) : null} stats={cur} matches={matches} teams={teams}
+          onSetImage={live && imageSetter ? imageSetter(cur.team) : null} onClose={() => setOpenKey(null)} />
+      )}
     </div>
   );
 }
@@ -3094,7 +3202,10 @@ function FriendsLeague() {
         )}
 
         {/* ═══ PLAYERS ═══ */}
-        {tab === "players" && <PlayersTab stats={pstats} />}
+        {tab === "players" && (
+          <PlayersTab stats={pstats} matches={matches} teams={teams}
+            imageSetter={t => canEditSquad(t) ? (pid, img) => setPlayerImage(t.id, pid, img) : null} />
+        )}
 
         {/* ═══ TEAMS ═══ */}
         {tab === "teams" && (
