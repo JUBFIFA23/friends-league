@@ -56,6 +56,43 @@ const save = (key, val) => {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
 };
 
+/* ══════════════════════════ CLOUD (ซิงก์ข้ามเครื่องผ่าน claude.ai) ══════════════════════════
+   เปิดบน claude.ai → ทีม/นัดเก็บในฐานข้อมูลกลางของหน้านี้ ทุกเครื่องเห็นชุดเดียวกันแบบสด
+     league/teams        = { list: [ทีม…] }   (เขียนได้เฉพาะแอดมิน — ตั้ง rule ไว้ตอน publish)
+     matches/<id>        = นัดละ 1 เอกสาร        (กรรมการกรอกผลพร้อมกันได้ ไม่ทับกัน)
+   สิทธิ์มาจากเมนู Share ของ claude.ai: Editor/Owner = แอดมิน · Contributor = กรรมการ · อื่น ๆ = ผู้ชม
+   เปิดผ่าน Live Server (ไม่มี window.claude) → ใช้ localStorage + บัญชีในเครื่องแบบเดิม */
+const HAS_CLAUDE = !!(window.claude && typeof window.claude.use === "function");
+
+async function connectCloud() {
+  const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+  if (!db) return null;
+  const me = user ? await user.me() : { id: null, name: "", canEdit: false };
+  const canWrite = user ? await user.can("data.write") : null;
+  // can() = null แปลว่าแพลตฟอร์มไม่บอก → ให้ปุ่มกรอกผลไว้ แล้วให้การเขียนจริงเป็นตัวตัดสิน
+  const role = me.canEdit ? "admin" : canWrite === false ? "viewer" : "referee";
+  return { db, me: { id: me.id || "me", name: me.name || "คุณ", username: me.id || "", avatarUrl: me.avatarUrl, role } };
+}
+
+// เขียนทีละครั้งต่อหน้า (ตามข้อกำหนดของ db: ห้ามเขียนเอกสารเดียวกันซ้อนกัน)
+let cloudQueue = Promise.resolve();
+const enqueue = job => (cloudQueue = cloudQueue.then(job, job));
+
+// เทียบรายการนัดเก่า/ใหม่ แล้วเขียนเฉพาะนัดที่เปลี่ยน
+function syncMatches(db, prev, next) {
+  const before = {}; prev.forEach(m => before[m.id] = m);
+  const after = {};  next.forEach(m => after[m.id] = m);
+  const col = db.collection("matches");
+  return enqueue(async () => {
+    for (const m of prev) if (!after[m.id]) await col.doc(String(m.id)).delete();
+    for (const m of next) {
+      if (before[m.id] && JSON.stringify(before[m.id]) === JSON.stringify(m)) continue;
+      await col.doc(String(m.id)).set(JSON.parse(JSON.stringify(m)));
+    }
+  });
+}
+const syncTeams = (db, list) => enqueue(() => db.doc("league/teams").set({ list: JSON.parse(JSON.stringify(list)) }));
+
 /* ══════════════════════════ SEED DATA ══════════════════════════ */
 const SEED_TEAMS = [
   { id:1, name:"NONT FC",      owner:"นนท์",  club:"Manchester City", num:10, kit:"#6CC0E5" },
@@ -257,7 +294,7 @@ const normUser = s => (s || "").trim().toLowerCase();
 const checkPassword = (u, pw) => !!u && hashPassword(pw, u.salt) === u.hash;
 const withPassword = (u, pw) => { const salt = randomHex(16); return { ...u, salt, hash: hashPassword(pw, salt) }; };
 const newSession = u => ({ uid: u.id, exp: Date.now() + 30 * 864e5 });   // จำการล็อกอิน 30 วัน
-const ROLE_LABEL = { admin: "แอดมิน", referee: "กรรมการ" };
+const ROLE_LABEL = { admin: "แอดมิน", referee: "กรรมการ", viewer: "ผู้ชม" };
 
 // คืนข้อความผิดพลาด (ภาษาไทย) หรือ "" ถ้าผ่าน
 function validateAccount(f, users, { needName = true, needConfirm = false } = {}) {
@@ -456,7 +493,9 @@ const Avatar = ({ u, size = "md" }) => {
 
 const RoleChip = ({ role }) => (
   <span className={"inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 " +
-    (role === "admin" ? "bg-accent/10 text-accent ring-accent/20" : "bg-sky-500/10 text-sky-700 ring-sky-500/20 dark:text-sky-300")}>
+    (role === "admin" ? "bg-accent/10 text-accent ring-accent/20"
+      : role === "referee" ? "bg-sky-500/10 text-sky-700 ring-sky-500/20 dark:text-sky-300"
+      : "bg-line/[0.05] text-muted ring-line/10")}>
     {ROLE_LABEL[role] || role}
   </span>
 );
@@ -1036,6 +1075,31 @@ function AccountModal({ user, users, onClose, onLogout, onChangePassword, onAddU
   );
 }
 
+// โหมด cloud: บัญชีคือบัญชี claude.ai · สิทธิ์ตั้งที่เมนู Share ของหน้านี้
+function CloudAccountModal({ user, onClose }) {
+  return (
+    <Modal onClose={onClose}>
+      <ModalHead kicker="บัญชี claude.ai" title={user.name} onClose={onClose} />
+      <div className="mb-5 flex items-center gap-3 rounded-2xl bg-sunken p-3 ring-1 ring-line/[0.06]">
+        {user.avatarUrl
+          ? <img src={user.avatarUrl} alt="" className="h-12 w-12 rounded-full" />
+          : <Avatar u={user} size="lg" />}
+        <div><RoleChip role={user.role} /></div>
+      </div>
+      <p className="text-sm leading-relaxed text-soft">ข้อมูลลีกซิงก์ทุกเครื่องอัตโนมัติ ใครแก้ผล คนอื่นเห็นทันที</p>
+      <div className="mt-4 divide-y divide-line/[0.06] rounded-xl bg-sunken text-sm ring-1 ring-line/[0.06]">
+        {[["แอดมิน", "Editor / Owner", "จัดการทีม จัดโปรแกรม กรอกผล"], ["กรรมการ", "Contributor", "กรอก/แก้ผล เลื่อนไม่ได้"], ["ผู้ชม", "Viewer", "ดูอย่างเดียว"]].map(([r, s, d]) => (
+          <div key={r} className="flex items-center justify-between gap-3 px-3 py-2">
+            <span className="text-ink">{r} <span className="text-xs text-muted">· {d}</span></span>
+            <span className="shrink-0 text-xs text-muted">{s}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-relaxed text-muted">เพิ่มคนหรือเปลี่ยนสิทธิ์ได้ที่ปุ่ม Share ของหน้านี้บน claude.ai (เจ้าของหน้าเท่านั้น)</p>
+    </Modal>
+  );
+}
+
 /* ══════════════════════════ TEAM PROFILE ══════════════════════════ */
 function TeamProfile({ team, rank, row, matches, teams, scorers, canEdit, onEdit, onClose }) {
   const tier = tierOf(rank, row);
@@ -1240,9 +1304,51 @@ function FriendsLeague() {
   const [fixtureOpen, setFixtureOpen]     = useState(false);
   const [shareBlob, setShareBlob]   = useState(null);
   const [sharing, setSharing]       = useState(false);
+  // cloud: "pending" = กำลังเชื่อม claude.ai · null = โหมดเครื่องเดียว · {db, me} = ซิงก์อยู่
+  const [cloud, setCloud]     = useState(HAS_CLAUDE ? "pending" : null);
+  const [synced, setSynced]   = useState({ teams: false, matches: false });
+  const [readOnly, setReadOnly] = useState(false);
+  const live = cloud && cloud !== "pending" ? cloud : null;
 
-  useEffect(() => save("fl_teams", teams), [teams]);
-  useEffect(() => save("fl_matches", matches), [matches]);
+  useEffect(() => {
+    if (cloud !== "pending") return;
+    connectCloud().then(setCloud, () => setCloud(null));
+  }, []);
+
+  // subscribe ครั้งเดียวหลังเชื่อมสำเร็จ
+  useEffect(() => {
+    if (!live) return;
+    const offTeams = live.db.doc("league/teams").onSnapshot(s => {
+      setTeams(s.exists ? (s.data().list || []) : []);
+      setSynced(v => ({ ...v, teams: true }));
+    }, () => setSynced(v => ({ ...v, teams: true })));
+    const offMatches = live.db.collection("matches").onSnapshot(s => {
+      setMatches(s.docs.map(d => d.data()));
+      setSynced(v => ({ ...v, matches: true }));
+    }, () => setSynced(v => ({ ...v, matches: true })));
+    return () => { offTeams(); offMatches(); };
+  }, [live]);
+
+  const cloudFail = e => {
+    const code = e && e.code;
+    if (code === "invalid_argument" || code === "revoked") {
+      setReadOnly(true);
+      alert("บันทึกไม่สำเร็จ: บัญชีนี้ไม่มีสิทธิ์แก้ข้อมูลลีก (ขอสิทธิ์จากเจ้าของหน้า)");
+    } else if (code === "quota_exceeded") alert("พื้นที่เก็บข้อมูลเต็ม ลบข้อมูลเก่าบางส่วนก่อน");
+    else alert("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง");
+  };
+  // ทุกการแก้ทีม/นัดผ่านสองตัวนี้: เครื่องเดียว = state ธรรมดา · cloud = อัปเดตจอทันที แล้วเขียนขึ้นฐานข้อมูล
+  const commitMatches = next => {
+    if (live) syncMatches(live.db, matches, next).catch(cloudFail);
+    setMatches(next);
+  };
+  const commitTeams = next => {
+    if (live) syncTeams(live.db, next).catch(cloudFail);
+    setTeams(next);
+  };
+
+  useEffect(() => { if (!cloud) save("fl_teams", teams); }, [teams, cloud]);
+  useEffect(() => { if (!cloud) save("fl_matches", matches); }, [matches, cloud]);
   useEffect(() => save("fl_users", users), [users]);
   useEffect(() => {
     if (session) save("fl_session", session);
@@ -1266,9 +1372,10 @@ function FriendsLeague() {
   const goals     = matches.reduce((s, m) => s + (m.hs || 0) + (m.as || 0), 0);
 
   // ผู้ใช้ที่ล็อกอินอยู่ (ถ้าบัญชีถูกลบ → หลุดเป็นผู้ชมเอง)
-  const user    = (session && users.find(u => u.id === session.uid)) || null;
-  const canEdit = !!user && (user.role === "admin" || user.role === "referee");
-  const isAdmin = !!user && user.role === "admin";
+  // โหมด cloud: ผู้ใช้ = บัญชี claude.ai ที่เปิดหน้านี้อยู่ (ไม่ต้องล็อกอินแยก)
+  const user    = live ? live.me : (session && users.find(u => u.id === session.uid)) || null;
+  const canEdit = !!user && !readOnly && (user.role === "admin" || user.role === "referee");
+  const isAdmin = !!user && !readOnly && user.role === "admin";
   const rankOf  = id => standings.findIndex(r => r.team.id === id) + 1;
   const rowOf   = id => standings.find(r => r.team.id === id);
   const openProfile = t => setProfileId(t.id);
@@ -1316,41 +1423,40 @@ function FriendsLeague() {
 
   /* ── league data ── */
   const saveResult = (id, hs, as, events) => {
-    setMatches(matches.map(m => m.id === id ? { ...m, hs, as, events, status:"done" } : m));
+    commitMatches(matches.map(m => m.id === id ? { ...m, hs, as, events, status:"done" } : m));
     setEditMatch(null);
   };
 
   const saveSchedule = (id, date, time) => {
-    setMatches(matches.map(m => m.id === id ? { ...m, date, time } : m));
+    commitMatches(matches.map(m => m.id === id ? { ...m, date, time } : m));
     setScheduleMatch(null);
   };
 
   const createFixtures = o => {
-    setMatches(buildFixtures(teams, o));
+    commitMatches(buildFixtures(teams, o));
     setFixtureOpen(false);
     setTab("matches");
   };
 
   const saveTeam = f => {
-    setTeams(f.id
+    commitTeams(f.id
       ? teams.map(t => t.id === f.id ? f : t)
       : [...teams, { ...f, id: Math.max(0, ...teams.map(t => t.id)) + 1 }]);
     setTeamModal(null);
   };
 
   const deleteTeam = id => {
-    setTeams(teams.filter(t => t.id !== id));
-    setMatches(matches.filter(m => m.home !== id && m.away !== id));
+    commitTeams(teams.filter(t => t.id !== id));
+    commitMatches(matches.filter(m => m.home !== id && m.away !== id));
     setTeamModal(null);
   };
 
   // ล้างแค่ข้อมูลลีก (ทีม/นัด) — บัญชีผู้ใช้ยังอยู่
   const resetAll = () => {
     if (!confirm("ล้างทีมและผลการแข่งทั้งหมด แล้วกลับไปใช้ข้อมูลตัวอย่าง? (บัญชีผู้ใช้ไม่ถูกลบ)")) return;
-    localStorage.removeItem("fl_teams");
-    localStorage.removeItem("fl_matches");
-    setTeams(SEED_TEAMS);
-    setMatches(SEED_MATCHES);
+    try { localStorage.removeItem("fl_teams"); localStorage.removeItem("fl_matches"); } catch (e) {}
+    commitTeams(SEED_TEAMS);
+    commitMatches(SEED_MATCHES);
   };
 
   const shareImage = async () => {
@@ -1381,8 +1487,8 @@ function FriendsLeague() {
     reader.onload = () => {
       try {
         const d = JSON.parse(reader.result);
-        if (d.teams)   setTeams(d.teams);
-        if (d.matches) setMatches(d.matches);
+        if (d.teams)   commitTeams(d.teams);
+        if (d.matches) commitMatches(d.matches);
       } catch (e) { alert("ไฟล์ไม่ถูกต้อง"); }
     };
     reader.readAsText(file);
@@ -1412,6 +1518,10 @@ function FriendsLeague() {
     { l:"จ่าฝูง",    v: (done.length && standings[0] && standings[0].team.name.split(" ")[0]) || "-", icon:"crown", c:"bg-amber-500/15 text-amber-600 dark:text-amber-300" },
   ];
 
+  if (cloud === "pending" || (live && !(synced.teams && synced.matches))) {
+    return <div className="grid min-h-screen place-content-center justify-items-center gap-4 bg-page text-sm text-muted"><div className="boot-ring"></div><div>กำลังซิงก์ข้อมูลลีก…</div></div>;
+  }
+
   return (
     <div className="relative min-h-screen bg-page text-soft antialiased">
       {/* แถบสีจาง ๆ ด้านบน ให้หน้าดูสดขึ้น */}
@@ -1439,13 +1549,13 @@ function FriendsLeague() {
             {user ? (
               <button onClick={() => setShowAccount(true)} aria-label="บัญชีของฉัน"
                 className="flex items-center gap-2.5 rounded-full bg-surface py-1 pl-1 pr-1 ring-1 ring-line/[0.08] transition hover:ring-accent/40 sm:pr-3.5 dark:bg-white/[0.04]">
-                <Avatar u={user} />
+                {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" /> : <Avatar u={user} />}
                 <span className="hidden text-left sm:block">
                   <span className="block max-w-[120px] truncate text-sm font-medium leading-tight text-ink">{user.name}</span>
                   <span className="block text-[11px] leading-tight text-muted">{ROLE_LABEL[user.role]}</span>
                 </span>
               </button>
-            ) : (
+            ) : cloud ? null : (
               <Btn variant="primary" onClick={() => setShowLogin(true)}>
                 <Ic n="login" size={14} /> {users.length ? "เข้าสู่ระบบ" : "ตั้งค่าแอดมิน"}
               </Btn>
@@ -1472,6 +1582,19 @@ function FriendsLeague() {
         {tab === "home" && (
           <div className="fl-enter">
             <SectionTitle icon="sparkles" kicker="Season 1 · Overview" title="ภาพรวมลีก" />
+
+            {live && synced.teams && teams.length === 0 && (
+              <Card className="mb-8 p-6 text-center">
+                <div className="font-display text-xl font-semibold text-ink">ยังไม่มีทีมในลีก</div>
+                <p className="mt-1 text-sm text-muted">{isAdmin ? "เพิ่มทีมของเพื่อน ๆ หรือลองใช้ข้อมูลตัวอย่างก่อนก็ได้" : "รอแอดมินเพิ่มทีม"}</p>
+                {isAdmin && (
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <Btn variant="primary" onClick={() => setTeamModal({})}><Ic n="plus" size={14} /> เพิ่มทีม</Btn>
+                    <Btn onClick={() => { commitTeams(SEED_TEAMS); commitMatches(SEED_MATCHES); }}><Ic n="sparkles" size={13} /> ใช้ข้อมูลตัวอย่าง</Btn>
+                  </div>
+                )}
+              </Card>
+            )}
 
             {nextMatch && (
               <NextMatch m={nextMatch} teams={teams} standings={standings} canEdit={canEdit}
@@ -1637,6 +1760,7 @@ function FriendsLeague() {
       {/* ═══ FOOTER ═══ */}
       <footer className="relative border-t border-line/[0.06] py-7 text-center text-xs text-muted">
         <div>Friends League · eFootball 2027 Mobile · บันทึกผลด้วยมือ (ไม่เชื่อมต่อ Konami API)</div>
+        <div className="mt-1">{live ? "ข้อมูลซิงก์ทุกเครื่องผ่าน claude.ai" : "ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้เท่านั้น"}</div>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
           <Btn onClick={exportData}><Ic n="download" size={13} /> Export JSON</Btn>
           {isAdmin && (
@@ -1654,7 +1778,8 @@ function FriendsLeague() {
       </footer>
 
       {showLogin && <LoginModal users={users} onClose={() => setShowLogin(false)} onLogin={login} onSetup={setupAdmin} />}
-      {showAccount && user && (
+      {showAccount && live && <CloudAccountModal user={user} onClose={() => setShowAccount(false)} />}
+      {showAccount && user && !live && (
         <AccountModal user={user} users={users} onClose={() => setShowAccount(false)} onLogout={logout}
           onChangePassword={changePassword} onAddUser={addUser} onUpdateUser={updateUser}
           onResetPassword={resetPassword} onDeleteUser={deleteUser} />
