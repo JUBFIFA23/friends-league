@@ -56,11 +56,11 @@ body::before {
 }
 
 /* ══════════════════ ลายเหลืองแบบ eFootball 2022 (ใน index.html › .ef-stripes) ══════════════════
-   มุมขวาบน + มุมซ้ายล่าง · พุ่งเข้าตอนเปิด → ลอยขยับช้า ๆ + แสงวาบวิ่งผ่าน
-   กลางจอหรี่ลายลง (::after) ให้ตัวหนังสือที่อยู่บนพื้นอ่านง่าย */
+   มุมขวาบน + มุมซ้ายล่าง · เส้นขนานกันไม่ตัดกัน · สีเหลืองทึบทั้งเส้น (ไม่หรี่ → ไม่เป็นสีขุ่น)
+   พุ่งเข้าตอนเปิด → ลอยขยับช้า ๆ + แสงวาบวิ่งผ่าน · ตัวหนังสือบนพื้นใช้ .ef-halo ให้อ่านง่าย */
 .ef-stripes { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.ef-stripes svg { position: absolute; width: clamp(380px, 52vw, 980px); height: auto; overflow: visible; }
-.ef-stripes .tr { top: 0; right: 0; }
+.ef-stripes svg { position: absolute; width: clamp(320px, 40vw, 820px); height: auto; overflow: visible; }
+.ef-stripes .tr { top: 110px; right: 0; }   /* เริ่มใต้แถบเมนูด้านบน (สูง ~110–120px) ไม่ให้ลายหลบอยู่หลังเมนู */
 .ef-stripes .bl { bottom: 0; left: 0; }
 .ef-stripes .s { fill: rgb(var(--stripe)); }
 .ef-stripes .in, .ef-stripes .in-y { transform-box: fill-box; animation: ef-in .9s cubic-bezier(.2, .9, .25, 1) both; }
@@ -75,12 +75,6 @@ body::before {
 .ef-stripes .glint { animation: ef-glint 7s ease-in-out 1.6s infinite; }
 .ef-stripes .glint-b { animation-delay: 4.6s; }
 @keyframes ef-glint { 0% { transform: translateX(0); } 38%, 100% { transform: translateX(1500px); } }
-.ef-stripes::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 60% 55% at 50% 50%, rgb(var(--page) / .8) 0%, rgb(var(--page) / .45) 55%, rgb(var(--page) / 0) 100%);
-}
 
 /* ตัวหนังสือที่วางบนพื้นหลังโดยตรง (หัวข้อ ลิงก์ ท้ายหน้า): ขอบเงาสีพื้น → อ่านออกแม้ทับลายเหลือง */
 .ef-halo { text-shadow: 0 0 2px rgb(var(--page)), 0 0 4px rgb(var(--page)), 0 0 10px rgb(var(--page)), 0 0 22px rgb(var(--page) / .9); }
@@ -137,7 +131,7 @@ body::before {
 }
 .ef-btn:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 3px; }
 .ef-btn-primary { color: rgb(var(--on-accent)); font-weight: 600; }
-.ef-btn-primary::before { background: linear-gradient(180deg, #FFEB5C, #FFC800); box-shadow: 0 6px 18px -8px rgb(255 210 0 / .75); }
+.ef-btn-primary::before { background: linear-gradient(180deg, #FFEB5C, #FFC800); box-shadow: 0 0 0 2px rgb(var(--page) / .85), 0 6px 18px -8px rgb(0 0 0 / .6); }
 .ef-btn-primary:hover::before { filter: brightness(1.08); }
 .ef-btn-ghost { color: rgb(var(--soft)); }
 .ef-btn-ghost::before { background: rgb(var(--line) / .08); box-shadow: inset 0 0 0 1px rgb(var(--line) / .25); }
