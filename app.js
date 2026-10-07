@@ -1474,6 +1474,18 @@ function SquadEditor({ team, onSave }) {
     const t = withSquad(team);
     setList(fresh()); setFormation(t.formation); setLineup(t.lineup); setMsg(null);
   }, [team.id]);
+  // รูปการ์ดที่เปลี่ยนจากที่อื่นระหว่างเปิดหน้านี้ (แตะนักเตะในโปรไฟล์ / ซิงก์ Drive) → ใส่เข้าแบบร่างด้วย
+  // ไม่งั้นกด "บันทึกรายชื่อ" แล้วรูปใหม่โดนค่าเก่าทับ (ยกเว้นคนที่เปลี่ยนรูปในหน้านี้เองแล้ว)
+  const imgKey = (team.players || []).map(p => p.id + "=" + (p.img || "")).join(",");
+  const lastImgs = useRef(null);
+  useEffect(() => {
+    const now = {};
+    (team.players || []).forEach(p => { now[p.id] = p.img || ""; });
+    const before = lastImgs.current;
+    lastImgs.current = now;
+    if (!before) return;
+    setList(prev => prev.map(p => p.id in now && now[p.id] !== (before[p.id] || "") && (p.img || "") === (before[p.id] || "") ? { ...p, img: now[p.id] } : p));
+  }, [imgKey]);
   // อัปเดตแบบ functional: การอัปโหลดรูปทำงานแบบ async ห้ามทับการแก้อื่นที่เกิดระหว่างรอ
   const upd = (id, patch) => { setList(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p)); setMsg(null); };
   const { images, putImage } = useContext(ImgContext);
@@ -1568,7 +1580,7 @@ function SquadEditor({ team, onSave }) {
                 (p.img && images[p.img] ? "ring-1 ring-white/30" : "border border-dashed border-line/35 text-muted hover:border-accent/60 hover:text-accent")}>
               {busyImg === p.id ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-line/30 border-t-accent" />
                 : p.img && images[p.img] ? <img src={images[p.img]} alt="" className="h-full w-full object-cover object-top" />
-                : <Ic n="image" size={14} />}
+                : <span className="flex flex-col items-center gap-0.5"><Ic n="image" size={14} /><span className="text-[10px] leading-none">รูป</span></span>}
               <input type="file" accept="image/*" className="sr-only" aria-label={"รูปการ์ด " + label}
                 onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) upload(p, f); }} />
             </label>
@@ -1675,6 +1687,7 @@ function SquadModal({ team, onClose, onSave }) {
   return (
     <Modal onClose={onClose} className="max-w-4xl">
       <ModalHead kicker={"รายชื่อนักเตะ · " + (team.club || "")} title={team.name} onClose={onClose} />
+      <p className="-mt-1 mb-4 text-xs leading-relaxed text-muted">ใส่รูปการ์ด: กดช่อง “รูป” ในแถวของนักเตะแต่ละคน แล้วกดบันทึกรายชื่อ · ตัวจริง 11 คนจะโชว์เป็นการ์ดในโปรไฟล์ทีม</p>
       <SquadEditor team={team} onSave={onSave} />
     </Modal>
   );
@@ -1988,9 +2001,8 @@ function Pitch({ team, cards = false, onCard }) {
             <PlayerCard p={p} pos={s.pos} kit={t.kit} off={off} />
           </button>
         );
-        return (
-          <div key={i} className="absolute flex w-[22%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
-            style={{ left: Math.min(89, Math.max(11, s.x)) + "%", top: s.y + "%" }}>
+        const chip = (
+          <>
             <span className="flex items-center gap-1">
               <span className={"ef-pos ef-pos-" + posGroup(s.pos) + " shadow-[0_4px_10px_rgba(0,0,0,0.4)]"}>{s.pos}</span>
               {p && p.ovr !== "" && p.ovr != null && <span className="font-display text-xs font-bold italic text-white drop-shadow">{p.ovr}</span>}
@@ -1999,21 +2011,52 @@ function Pitch({ team, cards = false, onCard }) {
               className={"max-w-full truncate rounded px-1.5 py-0.5 text-[11px] font-medium text-white " + (off ? "bg-loss/80" : "bg-black/50")}>
               {p ? p.name || "—" : "—"}
             </span>
-          </div>
+          </>
         );
+        const at = { left: Math.min(89, Math.max(11, s.x)) + "%", top: s.y + "%" };
+        // มี onCard (โปรไฟล์ทีม) → แตะป้ายเพื่อดูการ์ด/ใส่รูปได้เหมือนโหมดการ์ด
+        if (onCard && p) return (
+          <button key={i} type="button" onClick={() => onCard(p, s.pos)} aria-label={"ดูการ์ด " + (p.name || s.pos) + " (" + s.pos + ")"}
+            className="absolute flex w-[22%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 rounded outline-none transition-transform hover:z-10 hover:scale-105 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-accent"
+            style={at}>{chip}</button>
+        );
+        return <div key={i} className="absolute flex w-[22%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5" style={at}>{chip}</div>;
       })}
     </div>
   );
 }
 
 /* ══════════════════════════ CARD VIEWER (กดการ์ดบนสนาม → ดูใบใหญ่) ══════════════════════════ */
-function CardViewer({ p, team, slotPos, stats, onClose }) {
+// onSetImage (เฉพาะแอดมิน/ผู้จัดการทีมนั้น) → ใส่/เปลี่ยน/ลบรูปการ์ดได้ตรงนี้เลย บันทึกทันที
+function CardViewer({ p, team, slotPos, stats, onClose, onSetImage }) {
+  const { images, putImage } = useContext(ImgContext);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const has = !!(p.img && images[p.img]);
+  const who = p.name || slotPos || p.pos;
+  const upload = async file => {
+    setErr(""); setBusy(true);
+    try { onSetImage(p.id, await putImage(await makeCardImage(file))); }
+    catch (e) { setErr(e.message || "อัปโหลดรูปไม่สำเร็จ"); }
+    finally { setBusy(false); }
+  };
   const s = stats || {};
   const facts = [["นัด", s.apps || 0], ["ประตู", s.G || 0], ["แอสซิสต์", s.A || 0], ["เฉลี่ย", fmtAvg(s.avg)], ["MOTM", s.motm || 0]];
   return (
     <Modal onClose={onClose} className="max-w-sm">
       <ModalHead kicker={team.name + (slotPos ? " · ยืน " + slotPos : "")} title={p.name || "—"} onClose={onClose} />
       <PlayerCard p={p} pos={slotPos || p.pos} kit={team.kit} className="mx-auto w-48" />
+      {onSetImage && (
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <label className={"ef-btn ef-btn-primary inline-flex cursor-pointer items-center gap-2 px-5 py-2 text-sm " + (busy ? "pointer-events-none opacity-60" : "")}>
+            <Ic n="image" size={14} /> {busy ? "กำลังใส่รูป…" : has ? "เปลี่ยนรูปการ์ด" : "ใส่รูปการ์ด"}
+            <input type="file" accept="image/*" className="sr-only" disabled={busy} aria-label={(has ? "เปลี่ยนรูปการ์ด " : "ใส่รูปการ์ด ") + who}
+              onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) upload(f); }} />
+          </label>
+          {has && !busy && <Btn variant="danger" onClick={() => onSetImage(p.id, "")} aria-label={"ลบรูปการ์ด " + who}><Ic n="trash" size={13} /> ลบรูป</Btn>}
+        </div>
+      )}
+      {err && <div className="mt-2"><Note>{err}</Note></div>}
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
         <PosBadge pos={p.pos} />
         <CardBadge card={p.card} />
@@ -2036,7 +2079,7 @@ function CardViewer({ p, team, slotPos, stats, onClose }) {
 /* ══════════════════════════ TEAM PROFILE ══════════════════════════ */
 const fmtAvg = v => v == null ? "–" : v.toFixed(1);
 
-function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam, canEditSquad, onEdit, onSquad, onClose }) {
+function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam, canEditSquad, onEdit, onSquad, onSetImage, onClose }) {
   const tier = tierOf(rank, row);
   const r = row || { P:0, W:0, D:0, L:0, GF:0, GA:0, GD:0, PTS:0, form:[] };
   const squad = withSquad(team).players;
@@ -2057,10 +2100,13 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
   // ตัวจริงแสดงเป็นการ์ดเมื่อมีรูปอย่างน้อย 1 ใบ (กดสลับเป็นรายชื่อได้)
   const { images } = useContext(ImgContext);
   const t = withSquad(team);
-  const hasCards = t.lineup.some(id => { const p = t.players.find(x => x.id === id); return p && p.img && images[p.img]; });
+  const withImg = t.lineup.filter(id => { const p = t.players.find(x => x.id === id); return p && p.img && images[p.img]; }).length;
+  const hasCards = withImg > 0;
   const [view, setView] = useState(null);
   const shown = view || (hasCards ? "cards" : "names");
+  // เก็บแค่ id → หน้าดูการ์ดใช้ข้อมูลล่าสุดเสมอ (ใส่รูปแล้วเห็นทันที)
   const [viewing, setViewing] = useState(null);
+  const vp = viewing && t.players.find(x => x.id === viewing.id);
   const playerRow = p => {
     const s = st(p);
     return (
@@ -2136,9 +2182,13 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
           </div>
         </div>
         <div className={"mx-auto " + (shown === "cards" ? "max-w-[520px]" : "max-w-[380px]")}>
-          <Pitch team={team} cards={shown === "cards"} onCard={(p, pos) => setViewing({ p, pos })} />
-          {shown === "cards" && !hasCards && (
-            <p className="mt-2 text-center text-xs text-muted">ยังไม่มีรูปการ์ด — อัปโหลดได้ที่ “แก้รายชื่อนักเตะ” (ปุ่มรูปภาพหน้าแต่ละคน)</p>
+          <Pitch team={team} cards={shown === "cards"} onCard={(p, pos) => setViewing({ id: p.id, pos })} />
+          {onSetImage ? (
+            <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-xs font-semibold text-accent">
+              <Ic n="image" size={13} /> แตะนักเตะบนสนามเพื่อใส่รูปการ์ด · มีรูปแล้ว {withImg}/11
+            </p>
+          ) : shown === "cards" && !hasCards && (
+            <p className="mt-2 text-center text-xs text-muted">ยังไม่มีรูปการ์ด</p>
           )}
           {Object.keys(formStats).length > 0 && (
             <div className="mt-3 rounded-xl bg-sunken p-3 ring-1 ring-line/15">
@@ -2158,9 +2208,9 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
           )}
         </div>
       </div>
-      {viewing && (
-        <CardViewer p={viewing.p} team={team} slotPos={viewing.pos} stats={statsByKey[team.id + "|" + viewing.p.id]}
-          onClose={() => setViewing(null)} />
+      {vp && (
+        <CardViewer p={vp} team={team} slotPos={viewing.pos} stats={statsByKey[team.id + "|" + vp.id]}
+          onSetImage={onSetImage} onClose={() => setViewing(null)} />
       )}
 
       <div className="mt-6">
@@ -2764,6 +2814,12 @@ function FriendsLeague() {
     if (!t || !canEditSquad(t)) return;
     setTeams(teams.map(x => x.id === id ? withSquad({ ...x, players, formation, lineup }) : x));
   };
+  // รูปการ์ดจากหน้าดูการ์ด (แตะนักเตะบนสนามในโปรไฟล์) → บันทึกทันที · แบบ functional เพราะอัปโหลดเป็น async
+  const setPlayerImage = (teamId, playerId, img) => {
+    const t = teams.find(x => x.id === teamId);
+    if (!t || !canEditSquad(t)) return;
+    setTeams(ts => ts.map(x => x.id !== teamId ? x : { ...x, players: x.players.map(p => p.id === playerId ? { ...p, img } : p) }));
+  };
 
   // ล้างแค่ข้อมูลลีก (ทีม/นัด) — บัญชีผู้ใช้ยังอยู่
   const resetAll = () => {
@@ -2948,7 +3004,7 @@ function FriendsLeague() {
                 </Card>
                 <Card className="p-5">
                   <SubHead>รายชื่อนักเตะ 23 คน</SubHead>
-                  <p className="-mt-1 mb-4 text-xs leading-relaxed text-muted">ตัวจริงต้องมี 11 คน สำรอง 12 คน · กดปุ่ม “ตัวจริง/สำรอง” เพื่อสลับ · เลือกตำแหน่งได้ที่ป้ายสีด้านหน้า · กดช่องรูปหน้าแต่ละคนเพื่ออัปโหลดรูปการ์ด (โชว์บนสนามตัวจริงในโปรไฟล์ทีม) · ผลงานของนักเตะแต่ละคน แอดมินจะบันทึกให้หลังจบแต่ละนัด</p>
+                  <p className="-mt-1 mb-4 text-xs leading-relaxed text-muted">ตัวจริงต้องมี 11 คน สำรอง 12 คน · กดปุ่ม “ตัวจริง/สำรอง” เพื่อสลับ · เลือกตำแหน่งได้ที่ป้ายสีด้านหน้า · กดช่อง “รูป” ในแถวของแต่ละคนเพื่อใส่รูปการ์ด (โชว์บนสนามตัวจริงในโปรไฟล์ทีม) · ผลงานของนักเตะแต่ละคน แอดมินจะบันทึกให้หลังจบแต่ละนัด</p>
                   <SquadEditor team={myTeam} onSave={(players, formation, lineup) => saveSquad(myTeam.id, players, formation, lineup)} />
                 </Card>
               </div>
@@ -3091,6 +3147,7 @@ function FriendsLeague() {
           canEditTeam={isAdmin} canEditSquad={canEditSquad(profileTeam)}
           onEdit={t => { setProfileId(null); setTeamModal(t); }}
           onSquad={t => { setProfileId(null); if (isAdmin) setSquadTeamId(t.id); else setTab("myteam"); }}
+          onSetImage={canEditSquad(profileTeam) ? (pid, img) => setPlayerImage(profileTeam.id, pid, img) : null}
           onClose={() => setProfileId(null)} />
       )}
       {scheduleMatch && <ScheduleModal match={scheduleMatch} teams={teams} onClose={() => setScheduleMatch(null)} onSave={saveSchedule} />}
