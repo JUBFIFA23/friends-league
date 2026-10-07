@@ -2170,21 +2170,33 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
   const vp = viewing && t.players.find(x => x.id === viewing.id);
   const openPlayer = p => setViewing({ id: p.id, pos: slotOf(team, p.id) });
   // แถวนักเตะที่มีชื่อ → กดเพื่อดูการ์ด + สถิติ + ผลงานรายนัด
+  // จอแคบ (มือถือ): ตารางปัดซ้าย-ขวาได้ โดยช่องนักเตะ (PIN) ค้างอยู่ทางซ้าย · จอกว้างเห็นครบไม่ต้องปัด
+  // ป้ายประเภทการ์ดอยู่บรรทัดล่างใต้ชื่อ → ไม่ล้นไปทับช่อง OVR
+  const ROW = "grid grid-cols-[minmax(186px,1fr)_36px_repeat(4,34px)] items-center gap-1.5 pr-3";
+  const PIN = "sticky left-0 z-[1] border-r border-line/10 bg-sunken sm:border-r-0";
+  const anyImg = squad.some(p => p.img && images[p.img]);
   const playerRow = p => {
     const s = st(p);
     const tap = p.name ? { role: "button", tabIndex: 0, "aria-label": "ดูข้อมูลนักเตะ " + p.name, onClick: () => openPlayer(p),
       onKeyDown: e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openPlayer(p); } } } : {};
     return (
-      <div key={p.id} {...tap} className={"grid grid-cols-[38px_1fr_28px_repeat(4,30px)] items-center gap-1.5 px-3 py-1.5 text-sm tabular-nums " +
-        (p.name ? "cursor-pointer rounded-lg outline-none transition hover:bg-line/[0.07] focus-visible:ring-2 focus-visible:ring-accent" : "")}>
-        <PosBadge pos={p.pos} />
-        <span className="flex min-w-0 items-center gap-1.5">
-          {p.img && images[p.img] && (
-            <img src={images[p.img]} alt="" className="h-7 w-5 shrink-0 rounded-sm object-cover object-top ring-1 ring-white/20" />
-          )}
-          <span className={"truncate " + (p.name ? "text-ink" : "text-faint")}>{p.name || "ยังไม่ใส่ชื่อ"}</span>
-          <CardBadge card={p.name ? p.card : ""} />
-          <EfhubLink url={p.name ? p.efhub : ""} name={p.name} />
+      <div key={p.id} {...tap} className={ROW + " group py-1 text-sm tabular-nums " +
+        (p.name ? "cursor-pointer outline-none transition hover:bg-line/[0.07] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent" : "")}>
+        <span className={PIN + " flex min-w-0 items-center gap-2 self-stretch py-0.5 pl-3 transition " +
+          (p.name ? "group-hover:shadow-[inset_0_0_0_999px_rgb(var(--line)/0.07)]" : "")}>
+          <PosBadge pos={p.pos} />
+          {p.img && images[p.img]
+            ? <img src={images[p.img]} alt="" className="h-9 w-[26px] shrink-0 rounded-sm object-cover object-top ring-1 ring-white/20" />
+            : anyImg && <span className="w-[26px] shrink-0" />}
+          <span className="min-w-0">
+            <span className={"block truncate leading-tight " + (p.name ? "text-ink" : "text-faint")}>{p.name || "ยังไม่ใส่ชื่อ"}</span>
+            {p.name && (p.card || efhubHref(p.efhub)) && (
+              <span className="mt-1 flex items-center gap-1.5">
+                <CardBadge card={p.card} />
+                <EfhubLink url={p.efhub} name={p.name} />
+              </span>
+            )}
+          </span>
         </span>
         <span className="text-center font-display text-xs font-bold italic text-ink">{p.ovr === "" || p.ovr == null ? "–" : p.ovr}</span>
         <span className="text-center text-xs text-soft">{s ? s.apps : 0}</span>
@@ -2195,8 +2207,8 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
     );
   };
   const head = (
-    <div className="grid grid-cols-[38px_1fr_28px_repeat(4,30px)] gap-1.5 px-3 pb-1 pt-2 text-[10px] text-muted">
-      <span /><span /><span className="text-center">OVR</span><span className="text-center">นัด</span><span className="text-center">ประตู</span><span className="text-center">แอส</span><span className="text-center">เฉลี่ย</span>
+    <div className={ROW + " pb-1 pt-2 text-[10px] text-muted"}>
+      <span className={PIN + " self-stretch"} /><span className="text-center">OVR</span><span className="text-center">นัด</span><span className="text-center">ประตู</span><span className="text-center">แอส</span><span className="text-center">เฉลี่ย</span>
     </div>
   );
 
@@ -2282,14 +2294,18 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
       <div className="mt-6">
         <div>
           <SubHead>รายชื่อนักเตะ ({namedPlayers(team).length}/23)</SubHead>
-          <p className="-mt-2 mb-2 text-xs text-muted">กดที่นักเตะเพื่อดูการ์ด สถิติ และผลงานรายนัด</p>
-          <div className="rounded-xl bg-sunken ring-1 ring-line/15">
-            {head}
-            <div className="px-3 pt-1 text-[11px] font-semibold text-accent">ตัวจริง</div>
-            {squad.filter(p => p.starter).map(playerRow)}
-            <div className="mt-1 border-t border-line/10 px-3 pt-2 text-[11px] font-semibold text-soft">สำรอง</div>
-            {squad.filter(p => !p.starter).map(playerRow)}
-            <div className="h-2" />
+          <p className="-mt-2 mb-2 text-xs text-muted">กดที่นักเตะเพื่อดูการ์ด สถิติ และผลงานรายนัด<span className="sm:hidden"> · ปัดตารางซ้าย-ขวาเพื่อดูตัวเลข</span></p>
+          <div className="overflow-x-auto rounded-xl bg-sunken ring-1 ring-line/15">
+            <div className="min-w-[400px]">
+              {head}
+              <div className="sticky left-0 w-fit px-3 pt-1 text-[11px] font-semibold text-accent">ตัวจริง</div>
+              {squad.filter(p => p.starter).map(playerRow)}
+              <div className="mt-1 border-t border-line/10 pt-2">
+                <div className="sticky left-0 w-fit px-3 text-[11px] font-semibold text-soft">สำรอง</div>
+              </div>
+              {squad.filter(p => !p.starter).map(playerRow)}
+              <div className="h-2" />
+            </div>
           </div>
         </div>
       </div>
