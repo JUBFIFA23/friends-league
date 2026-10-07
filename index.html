@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="theme-color" content="#060E2A" />
+<meta name="theme-color" content="#0B27C4" />
 <title>Friends League · eFootball 2027 Mobile</title>
 
 <!-- ═══ PRELOAD: ให้ app.js เริ่มโหลดพร้อม Babel ไม่ต้องรอต่อคิว ═══ -->
@@ -56,6 +56,57 @@
 <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
 </head>
 <body>
+
+  <!-- ═══ พื้นหลังลายเหลืองแบบ eFootball 2022 (ตกแต่งเท่านั้น · ลอยอยู่หลังเนื้อหา) ═══
+       เส้นพุ่งเข้าตอนเปิด → ลอยขยับช้า ๆ + แสงวาบวิ่งผ่าน · prefers-reduced-motion = ลายนิ่ง -->
+  <div class="ef-stripes" aria-hidden="true">
+    <svg class="tr" viewBox="0 0 1000 700" preserveAspectRatio="xMaxYMin meet">
+      <defs>
+        <linearGradient id="efGlint" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stop-color="#fff" stop-opacity="0" />
+          <stop offset=".5" stop-color="#fff" stop-opacity=".8" />
+          <stop offset="1" stop-color="#fff" stop-opacity="0" />
+        </linearGradient>
+        <clipPath id="efClipTR">
+          <rect x="380" y="150" width="900" height="112" rx="56" />
+          <rect x="570" y="296" width="720" height="66" rx="33" />
+          <rect x="300" y="92" width="990" height="20" rx="10" />
+        </clipPath>
+      </defs>
+      <g class="drift">
+        <g transform="rotate(-22 1000 0)">
+          <g class="s">
+            <rect class="in" style="animation-delay:.10s" x="380" y="150" width="900" height="112" rx="56" />
+            <rect class="in" style="animation-delay:.22s" x="570" y="296" width="720" height="66" rx="33" />
+            <rect class="in" style="animation-delay:.00s" x="300" y="92" width="990" height="20" rx="10" />
+            <rect class="in" style="animation-delay:.34s" x="690" y="398" width="600" height="16" rx="8" />
+            <path class="in" style="animation-delay:.42s" d="M470 22 h86 l-50 66 h-86 z" />
+          </g>
+          <g clip-path="url(#efClipTR)"><rect class="glint" x="-60" y="60" width="260" height="340" fill="url(#efGlint)" /></g>
+        </g>
+        <path class="s in-y" style="animation-delay:.5s" d="M1000 300 L1000 404 L920 590 L812 590 Z" />
+      </g>
+    </svg>
+    <svg class="bl" viewBox="0 0 1000 700" preserveAspectRatio="xMinYMax meet">
+      <defs>
+        <clipPath id="efClipBL">
+          <rect x="-300" y="440" width="840" height="112" rx="56" />
+          <rect x="-300" y="380" width="580" height="34" rx="17" />
+        </clipPath>
+      </defs>
+      <g class="drift">
+        <g transform="rotate(-22 0 700)">
+          <g class="s">
+            <rect class="in" style="animation-delay:.18s" x="-300" y="440" width="840" height="112" rx="56" />
+            <rect class="in" style="animation-delay:.30s" x="-300" y="380" width="580" height="34" rx="17" />
+            <rect class="in" style="animation-delay:.06s" x="-300" y="596" width="1040" height="22" rx="11" />
+            <path class="in" style="animation-delay:.46s" d="M70 292 L250 346 L70 400 L122 346 Z" />
+          </g>
+          <g clip-path="url(#efClipBL)"><rect class="glint glint-b" x="-360" y="340" width="260" height="260" fill="url(#efGlint)" /></g>
+        </g>
+      </g>
+    </svg>
+  </div>
 
   <div id="root">
     <div class="boot">

@@ -4,7 +4,7 @@
    ทุกสีผ่านความคมชัด ≥4.5:1 บนพื้นการ์ด (faint ใช้กับของตกแต่งเท่านั้น) */
 :root {
   color-scheme: dark;
-  --page: 6 14 42;          /* #060E2A */
+  --page: 8 24 150;         /* #081896 น้ำเงินสดแบบโปสเตอร์ eFootball 2022 */
   --surface: 17 42 107;     /* #112A6B */
   --sunken: 8 20 54;        /* #081436 */
   --ink: 255 255 255;
@@ -17,6 +17,7 @@
   --link: 91 155 255;       /* #5B9BFF น้ำเงินสว่าง */
   --win: 52 227 160;
   --loss: 255 107 133;
+  --stripe: 255 228 0;      /* #FFE400 ลายเหลืองพื้นหลัง */
 
   --surface-bg: linear-gradient(180deg, #112A6B 0%, #0B1C4A 100%);
   --surface-shadow: inset 0 1px 0 rgb(255 255 255 / .07), 0 18px 40px -24px rgb(0 0 0 / .85);
@@ -42,7 +43,7 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
 }
-/* แสงน้ำเงินจาง ๆ มุมบน แบบฉากหลังเมนูเกม (fixed ไม่เลื่อนตาม) */
+/* น้ำเงินสดไล่สีจากด้านบน + แสงฟ้ามุมขวาบน แบบโปสเตอร์ eFootball 2022 (fixed ไม่เลื่อนตาม) */
 body::before {
   content: "";
   position: fixed;
@@ -50,9 +51,39 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(900px 480px at 88% -8%, rgb(47 120 255 / .30), transparent 62%),
-    linear-gradient(180deg, #0A1B4F 0%, rgb(var(--page)) 460px);
+    radial-gradient(1100px 620px at 86% -10%, rgb(70 120 255 / .45), transparent 62%),
+    linear-gradient(180deg, #0B27C4 0%, rgb(var(--page)) 520px);
 }
+
+/* ══════════════════ ลายเหลืองแบบ eFootball 2022 (ใน index.html › .ef-stripes) ══════════════════
+   มุมขวาบน + มุมซ้ายล่าง · พุ่งเข้าตอนเปิด → ลอยขยับช้า ๆ + แสงวาบวิ่งผ่าน
+   กลางจอหรี่ลายลง (::after) ให้ตัวหนังสือที่อยู่บนพื้นอ่านง่าย */
+.ef-stripes { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.ef-stripes svg { position: absolute; width: clamp(380px, 52vw, 980px); height: auto; overflow: visible; }
+.ef-stripes .tr { top: 0; right: 0; }
+.ef-stripes .bl { bottom: 0; left: 0; }
+.ef-stripes .s { fill: rgb(var(--stripe)); }
+.ef-stripes .in, .ef-stripes .in-y { transform-box: fill-box; animation: ef-in .9s cubic-bezier(.2, .9, .25, 1) both; }
+.ef-stripes .tr .in { transform-origin: right center; }
+.ef-stripes .bl .in { transform-origin: left center; }
+.ef-stripes .in-y { transform-origin: center top; animation-name: ef-in-y; }
+@keyframes ef-in   { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes ef-in-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.ef-stripes .drift { animation: ef-drift 9s ease-in-out 1.2s infinite alternate; }
+.ef-stripes .bl .drift { animation-duration: 11s; animation-direction: alternate-reverse; }
+@keyframes ef-drift { from { transform: translate(0, 0); } to { transform: translate(-18px, 8px); } }
+.ef-stripes .glint { animation: ef-glint 7s ease-in-out 1.6s infinite; }
+.ef-stripes .glint-b { animation-delay: 4.6s; }
+@keyframes ef-glint { 0% { transform: translateX(0); } 38%, 100% { transform: translateX(1500px); } }
+.ef-stripes::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 55% at 50% 50%, rgb(var(--page) / .8) 0%, rgb(var(--page) / .45) 55%, rgb(var(--page) / 0) 100%);
+}
+
+/* ตัวหนังสือที่วางบนพื้นหลังโดยตรง (หัวข้อ ลิงก์ ท้ายหน้า): ขอบเงาสีพื้น → อ่านออกแม้ทับลายเหลือง */
+.ef-halo { text-shadow: 0 0 2px rgb(var(--page)), 0 0 4px rgb(var(--page)), 0 0 10px rgb(var(--page)), 0 0 22px rgb(var(--page) / .9); }
 
 .font-display { font-variant-numeric: tabular-nums; }
 
@@ -237,4 +268,5 @@ input[type=color]::-webkit-color-swatch {
 
 @media (prefers-reduced-motion: reduce) {
   *, .boot-ring { animation: none !important; transition: none !important; }
+  .ef-stripes .glint { display: none; }
 }

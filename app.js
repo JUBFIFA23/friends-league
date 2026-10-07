@@ -210,7 +210,7 @@ const SEED_TEAMS = [
   { id:6, name:"MHOO FC",      owner:"หมู",   club:"Bayern Munich",   kit:"#C8452F" },
 ].map(t => withSquad({ ...t, players: seedSquad(t.id), formation: SEED_FORMATION[t.id] }));
 
-// ผลงานตัวอย่าง: ตัวจริงลงเล่นครบ คะแนน = 6 + ประตู + ½·แอสซิสต์ ± ผลแพ้ชนะ · MOTM = คะแนนสูงสุด
+// ผลงานตัวอย่าง: ตัวจริงลงเล่นครบ · MOTM = คนที่ยิง/แอสซิสต์มากสุด (ทีมที่ชนะได้เปรียบ)
 function seedPerf(m) {
   if (m.status !== "done") return m;
   const perf = {};
@@ -219,13 +219,12 @@ function seedPerf(m) {
     const team = SEED_TEAMS.find(t => t.id === tid);
     const res = Math.sign(tid === m.home ? m.hs - m.as : m.as - m.hs);
     perf[tid] = {};
-    team.players.filter(p => p.starter).forEach((p, i) => {
+    team.players.filter(p => p.starter).forEach(p => {
       const g = m.events.filter(e => e.type === "goal" && e.teamId === tid && e.player === p.name).length;
       const a = m.events.filter(e => e.type === "goal" && e.teamId === tid && e.assist === p.name).length;
-      const jitter = ((m.id * 7 + i * 3) % 5 - 2) * 0.25;
-      const r = Math.max(4.5, Math.min(10, Math.round((6 + g + a * 0.5 + res * 0.5 + jitter) * 2) / 2));
-      perf[tid][p.id] = { r, n: p.name };
-      if (!best || r > best.r) best = { teamId: tid, playerId: p.id, n: p.name, r };
+      const score = g * 2 + a + (res > 0 ? 0.5 : 0);
+      perf[tid][p.id] = { n: p.name };
+      if (!best || score > best.score) best = { teamId: tid, playerId: p.id, n: p.name, score };
     });
   });
   const formOf = tid => SEED_TEAMS.find(t => t.id === tid).formation;
@@ -325,7 +324,7 @@ function computeMovement(teams, matches) {
 }
 
 /* ผลงานนักเตะรายคน จากทุกนัดที่จบแล้ว
-   - match.perf[teamId][playerId] = { r: คะแนน|null, n: ชื่อ }  → ลงเล่น + คะแนน
+   - match.perf[teamId][playerId] = { n: ชื่อ }  → ลงเล่น (ข้อมูลเก่าอาจมี r = คะแนน แต่ไม่ใช้แล้ว)
    - match.events (ประตู/แอสซิสต์/ใบ) ผูกด้วย playerId · ข้อมูลเก่าที่มีแค่ชื่อ → จับคู่ชื่อในทีม
    - match.motm = { teamId, playerId, n }
    นักเตะที่ถูกเปลี่ยนตัวออกจากทีมแล้วยังเห็นผลงานเดิมได้ (ขึ้นว่า "อดีต") */
@@ -340,7 +339,7 @@ function computePlayerStats(teams, matches) {
   const stats = {};
   const get = (tid, pid, name) => {
     const key = tid + "|" + (pid || "n:" + (name || "").trim().toLowerCase());
-    if (!stats[key]) stats[key] = { key, teamId: tid, playerId: pid || "", name: name || "", apps: 0, G: 0, A: 0, Y: 0, R: 0, rSum: 0, rN: 0, motm: 0 };
+    if (!stats[key]) stats[key] = { key, teamId: tid, playerId: pid || "", name: name || "", apps: 0, G: 0, A: 0, Y: 0, R: 0, motm: 0 };
     if (name && !stats[key].name) stats[key].name = name;
     return stats[key];
   };
@@ -349,9 +348,7 @@ function computePlayerStats(teams, matches) {
     const seen = new Set();
     const appear = s => { if (!seen.has(s.key)) { seen.add(s.key); s.apps++; } };
     Object.entries(m.perf || {}).forEach(([tid, ps]) => Object.entries(ps || {}).forEach(([pid, v]) => {
-      const s = get(+tid, pid, v && v.n);
-      appear(s);
-      if (v && typeof v.r === "number") { s.rSum += v.r; s.rN++; }
+      appear(get(+tid, pid, v && v.n));
     }));
     (m.events || []).forEach(e => {
       if (!e.player && !e.playerId) return;
@@ -372,7 +369,7 @@ function computePlayerStats(teams, matches) {
     const p = t && s.playerId ? (t.players || []).find(x => x.id === s.playerId) : null;
     const live = p && (p.name || "").trim();
     return { ...s, team: t, name: live || s.name || "—", pos: p ? p.pos : "", card: p ? p.card || "" : "", ovr: p ? p.ovr : "", efhub: p ? p.efhub || "" : "",
-             former: !!s.playerId && !live, avg: s.rN ? s.rSum / s.rN : null };
+             former: !!s.playerId && !live };
   });
 }
 
@@ -764,10 +761,10 @@ const EfhubLink = ({ url, name }) => efhubHref(url) ? (
 const SectionTitle = ({ icon, kicker, title, action }) => (
   <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
     <div>
-      <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">
+      <div className="ef-halo mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">
         <Ic n={icon} size={13} /> {kicker}
       </div>
-      <h2 className="ef-title font-display text-3xl font-bold italic text-ink">{title}</h2>
+      <h2 className="ef-title ef-halo font-display text-3xl font-bold italic text-ink">{title}</h2>
     </div>
     {action}
   </div>
@@ -775,8 +772,8 @@ const SectionTitle = ({ icon, kicker, title, action }) => (
 
 const SubHead = ({ children, link, onLink }) => (
   <div className="mb-3 flex items-center justify-between">
-    <span className="font-display text-base font-semibold italic text-ink">{children}</span>
-    {link && <button onClick={onLink} className="text-xs font-medium text-accent hover:underline">{link} →</button>}
+    <span className="ef-halo font-display text-base font-semibold italic text-ink">{children}</span>
+    {link && <button onClick={onLink} className="rounded-full bg-page/80 px-3 py-1 text-xs font-medium text-accent ring-1 ring-accent/30 transition hover:bg-page hover:ring-accent/60">{link} →</button>}
   </div>
 );
 
@@ -1050,7 +1047,7 @@ const MatchRow = ({ m, teams, canEdit, isAdmin, onResult, onSchedule }) => {
         {(canEdit || (isAdmin && !done)) && (
           <div className="mt-1.5 flex justify-center gap-3 text-[11px]">
             {canEdit && <button onClick={() => onResult(m)} className="font-semibold text-accent hover:underline">{done ? "แก้ไขผล" : "กรอกผล"}</button>}
-            {isAdmin && !done && <button onClick={() => onSchedule(m)} className="text-muted hover:text-ink hover:underline">เลื่อนวัน</button>}
+            {isAdmin && !done && <button onClick={() => onSchedule(m)} aria-label={"แก้นัด " + (h ? h.name : "") + " พบ " + (a ? a.name : "")} className="text-muted hover:text-ink hover:underline">แก้นัด</button>}
           </div>
         )}
       </div>
@@ -1139,7 +1136,7 @@ function PlayerPick({ team, id, name, onChange, placeholder, disabled }) {
   );
 }
 
-// สถานะแก้ไขผลงาน: ทุกคนที่มีชื่อในทีม → { on: ลงเล่นไหม, r: คะแนน (string ในช่องกรอก), n: ชื่อ }
+// สถานะแก้ไขผู้ลงเล่น: ทุกคนที่มีชื่อในทีม → { on: ลงเล่นไหม, n: ชื่อ }
 function initPerf(match, teams) {
   const out = {};
   teams.forEach(t => {
@@ -1148,7 +1145,7 @@ function initPerf(match, teams) {
     out[t.id] = {};
     namedPlayers(t).forEach(p => {
       const s = saved && saved[p.id];
-      out[t.id][p.id] = { on: saved ? !!s : p.starter, r: s && typeof s.r === "number" ? String(s.r) : "", n: p.name };
+      out[t.id][p.id] = { on: saved ? !!s : p.starter, n: p.name };
     });
   });
   return out;
@@ -1193,9 +1190,7 @@ function ResultModal({ match, teams, onClose, onSave }) {
       outPerf[tid] = {};
       Object.keys(saved).forEach(pid => { if (!(pid in ps)) outPerf[tid][pid] = saved[pid]; });
       Object.entries(ps).forEach(([pid, v]) => {
-        if (!v.on) return;
-        const r = parseFloat(v.r);
-        outPerf[tid][pid] = { r: isNaN(r) ? null : Math.max(0, Math.min(10, Math.round(r * 2) / 2)), n: v.n };
+        if (v.on) outPerf[tid][pid] = { n: v.n };
       });
     });
     let best = null;
@@ -1217,14 +1212,11 @@ function ResultModal({ match, teams, onClose, onSave }) {
     const row = p => {
       const v = ps[p.id], key = t.id + "|" + p.id, star = motm === key;
       return (
-        <div key={p.id} className="grid grid-cols-[22px_38px_1fr_64px_30px] items-center gap-2 py-1.5">
+        <div key={p.id} className="grid grid-cols-[22px_38px_1fr_30px] items-center gap-2 py-1.5">
           <input type="checkbox" checked={v.on} onChange={e => { setP(t.id, p.id, { on: e.target.checked }); if (!e.target.checked && star) setMotm(""); }}
             aria-label={"ลงเล่น: " + p.name} className="h-4 w-4 accent-[#FFDE2E]" />
           <PosBadge pos={p.pos} />
           <span className={"truncate text-sm " + (v.on ? "text-ink" : "text-faint")}>{p.name}</span>
-          <input type="number" step="0.5" min="0" max="10" value={v.r} disabled={!v.on} placeholder="—"
-            onChange={e => setP(t.id, p.id, { r: e.target.value })} aria-label={"คะแนนของ " + p.name}
-            className={INPUT + " px-2 py-1 text-center"} />
           <button type="button" disabled={!v.on} onClick={() => setMotm(star ? "" : key)} aria-pressed={star}
             aria-label={"ผู้เล่นยอดเยี่ยม: " + p.name} title="ผู้เล่นยอดเยี่ยม (MOTM)"
             className={"grid h-7 w-7 place-items-center rounded-md transition disabled:opacity-30 " + (star ? "bg-accent text-on-accent" : "text-muted hover:text-accent")}>
@@ -1275,7 +1267,7 @@ function ResultModal({ match, teams, onClose, onSave }) {
         </div>
       </div>
 
-      <Segmented value={tab} onChange={setTab} items={[["events", "ประตู / ใบเหลือง-แดง"], ["perf", "ผลงานนักเตะ"]]} />
+      <Segmented value={tab} onChange={setTab} items={[["events", "ประตู / ใบเหลือง-แดง"], ["perf", "ผู้ลงเล่น / MOTM"]]} />
 
       {tab === "events" ? (
         <>
@@ -1316,7 +1308,7 @@ function ResultModal({ match, teams, onClose, onSave }) {
         </>
       ) : (
         <>
-          <p className="mb-3 text-xs leading-relaxed text-muted">ติ๊กคนที่ลงเล่น · ใส่คะแนน 0–10 (เว้นว่างได้) · กด ★ เลือกผู้เล่นยอดเยี่ยม (MOTM) 1 คน · ประตู/แอสซิสต์/ใบ นับจากแท็บแรกให้อัตโนมัติ</p>
+          <p className="mb-3 text-xs leading-relaxed text-muted">ติ๊กคนที่ลงเล่น (ติ๊กตัวจริงไว้ให้แล้ว) · กด ★ เลือกผู้เล่นยอดเยี่ยม (MOTM) 1 คน · ประตู/แอสซิสต์/ใบ นับจากแท็บแรกให้อัตโนมัติ</p>
           <div className="grid gap-3 md:grid-cols-2">{perfBlock(home)}{perfBlock(away)}</div>
         </>
       )}
@@ -2018,9 +2010,8 @@ function playerLog(teamId, player, matches, teams) {
       const pt = m.perf && m.perf[teamId];
       const played = !!pt && typeof pt === "object" && Object.prototype.hasOwnProperty.call(pt, player.id);
       if (!played && !G && !A && !Y && !R) return null;
-      const v = played ? pt[player.id] : null;
       const home = m.home === teamId, gf = home ? m.hs : m.as, ga = home ? m.as : m.hs;
-      return { m, home, gf, ga, opp: nameOf(home ? m.away : m.home), r: v && typeof v.r === "number" ? v.r : null, G, A, Y, R,
+      return { m, home, gf, ga, opp: nameOf(home ? m.away : m.home), G, A, Y, R,
                motm: !!m.motm && String(m.motm.teamId) === String(teamId) && isMe(m.motm.playerId, m.motm.n) };
     }).filter(Boolean);
 }
@@ -2042,8 +2033,8 @@ function CardViewer({ p, team, slotPos, stats, matches, teams, onClose, onSetIma
   const s = stats || {};
   const G = s.G || 0, A = s.A || 0;
   // [ชื่อ, ค่า, เน้นสี]
-  const facts = [["นัดที่ลงเล่น", s.apps || 0], ["ประตู", G], ["แอสซิสต์", A], ["ยิง+แอส", G + A],
-                 ["คะแนนเฉลี่ย", fmtAvg(s.avg), true], ["MOTM", s.motm || 0], ["ใบเหลือง", s.Y || 0], ["ใบแดง", s.R || 0]];
+  const facts = [["นัดที่ลงเล่น", s.apps || 0], ["ประตู", G, true], ["แอสซิสต์", A],
+                 ["ยิง+แอส", G + A], ["MOTM", s.motm || 0], ["ใบเหลือง / แดง", (s.Y || 0) + " / " + (s.R || 0)]];
   const role = p.former ? "อดีตนักเตะ" : p.starter ? "ตัวจริง" + (slotPos ? " · ยืน " + slotPos : "") : p.starter === false ? "สำรอง" : "";
   const box = "rounded-lg bg-sunken px-2 py-2 text-center ring-1 ring-line/15";
   return (
@@ -2089,7 +2080,7 @@ function CardViewer({ p, team, slotPos, stats, matches, teams, onClose, onSetIma
           {slotPos && p.pos && offPosition(p.pos, slotPos) && <p className="mt-2 text-center text-xs text-loss">เล่นนอกตำแหน่ง: ตำแหน่งจริง {p.pos} แต่ยืน {slotPos}</p>}
 
           {/* สถิติรวมทั้งฤดูกาล */}
-          <div className="mt-3 grid grid-cols-4 gap-1.5">
+          <div className="mt-3 grid grid-cols-3 gap-1.5">
             {facts.map(([l, v, hot]) => (
               <div key={l} className={box + " px-1"}>
                 <div className="text-[10px] text-muted">{l}</div>
@@ -2120,9 +2111,6 @@ function CardViewer({ p, team, slotPos, stats, matches, teams, onClose, onSetIma
                       {x.R > 0 && <span title="ใบแดง">🟥</span>}
                       {x.motm && <span title="ผู้เล่นยอดเยี่ยม (MOTM)" className="text-accent">★</span>}
                     </span>
-                    <span title="คะแนนนัดนี้" className={"w-8 shrink-0 text-right font-display text-sm font-bold italic " + (x.r != null && x.r >= 8 ? "text-accent" : "text-ink")}>
-                      {x.r != null ? x.r.toFixed(1) : "–"}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -2138,7 +2126,6 @@ function CardViewer({ p, team, slotPos, stats, matches, teams, onClose, onSetIma
 }
 
 /* ══════════════════════════ TEAM PROFILE ══════════════════════════ */
-const fmtAvg = v => v == null ? "–" : v.toFixed(1);
 
 function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam, canEditSquad, onEdit, onSquad, onSetImage, onClose }) {
   const tier = tierOf(rank, row);
@@ -2172,7 +2159,7 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
   // แถวนักเตะที่มีชื่อ → กดเพื่อดูการ์ด + สถิติ + ผลงานรายนัด
   // จอแคบ (มือถือ): ตารางปัดซ้าย-ขวาได้ โดยช่องนักเตะ (PIN) ค้างอยู่ทางซ้าย · จอกว้างเห็นครบไม่ต้องปัด
   // ป้ายประเภทการ์ดอยู่บรรทัดล่างใต้ชื่อ → ไม่ล้นไปทับช่อง OVR
-  const ROW = "grid grid-cols-[minmax(186px,1fr)_36px_repeat(4,34px)] items-center gap-1.5 pr-3";
+  const ROW = "grid grid-cols-[minmax(186px,1fr)_36px_repeat(3,34px)] items-center gap-1.5 pr-3";
   const PIN = "sticky left-0 z-[1] border-r border-line/10 bg-sunken sm:border-r-0";
   const anyImg = squad.some(p => p.img && images[p.img]);
   const playerRow = p => {
@@ -2202,13 +2189,12 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
         <span className="text-center text-xs text-soft">{s ? s.apps : 0}</span>
         <span className="text-center text-xs font-semibold text-accent">{s ? s.G : 0}</span>
         <span className="text-center text-xs text-soft">{s ? s.A : 0}</span>
-        <span className="text-center text-xs text-soft">{fmtAvg(s && s.avg)}</span>
       </div>
     );
   };
   const head = (
     <div className={ROW + " pb-1 pt-2 text-[10px] text-muted"}>
-      <span className={PIN + " self-stretch"} /><span className="text-center">OVR</span><span className="text-center">นัด</span><span className="text-center">ประตู</span><span className="text-center">แอส</span><span className="text-center">เฉลี่ย</span>
+      <span className={PIN + " self-stretch"} /><span className="text-center">OVR</span><span className="text-center">นัด</span><span className="text-center">ประตู</span><span className="text-center">แอส</span>
     </div>
   );
 
@@ -2296,7 +2282,7 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
           <SubHead>รายชื่อนักเตะ ({namedPlayers(team).length}/23)</SubHead>
           <p className="-mt-2 mb-2 text-xs text-muted">กดที่นักเตะเพื่อดูการ์ด สถิติ และผลงานรายนัด<span className="sm:hidden"> · ปัดตารางซ้าย-ขวาเพื่อดูตัวเลข</span></p>
           <div className="overflow-x-auto rounded-xl bg-sunken ring-1 ring-line/15">
-            <div className="min-w-[400px]">
+            <div className="min-w-[366px]">
               {head}
               <div className="sticky left-0 w-fit px-3 pt-1 text-[11px] font-semibold text-accent">ตัวจริง</div>
               {squad.filter(p => p.starter).map(playerRow)}
@@ -2341,25 +2327,73 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
   );
 }
 
-/* ══════════════════════════ SCHEDULE MODAL (เลื่อนวัน) ══════════════════════════ */
-function ScheduleModal({ match, teams, onClose, onSave }) {
-  const [date, setDate] = useState(match.date || isoDate(new Date()));
-  const [time, setTime] = useState(timeOf(match));
-  const h = teams.find(t => t.id === match.home), a = teams.find(t => t.id === match.away);
+/* ══════════════════════════ MATCH MODAL (แอดมิน: เพิ่มนัดเอง / แก้นัดที่ยังไม่แข่ง) ══════════════════════════ */
+// เลือกคู่แข่งเองได้ (ไม่สุ่ม) · เตือนถ้าทีมมีนัดในสัปดาห์นั้นแล้ว หรือคู่นี้เคยจัดไว้แล้ว (ยังบันทึกได้ เช่น นัดเหย้า-เยือน)
+function MatchModal({ match, teams, matches, onClose, onSave, onDelete }) {
+  const isNew = !match.id;
+  const others = matches.filter(m => m.id !== match.id);
+  const inRound = r => others.filter(m => m.round === r);
+  const [f, setF] = useState(() => {
+    const r = match.round || (matches.length ? Math.max(...matches.map(m => m.round)) : 1);
+    const ref = inRound(r)[0];
+    return { round: r, home: match.home || "", away: match.away || "",
+             date: match.date || (ref && ref.date) || isoDate(new Date()),
+             time: match.time ? timeOf(match) : ref ? timeOf(ref) : "20:00" };
+  });
+  const set = (k, v) => setF({ ...f, [k]: v });
+  const nameOf = id => { const t = teams.find(x => x.id === id); return t ? t.name : ""; };
+  const busy = id => !!id && inRound(f.round).some(m => m.home === id || m.away === id);
+  const dup = f.home && f.away ? others.filter(m => (m.home === f.home && m.away === f.away) || (m.home === f.away && m.away === f.home)).length : 0;
+  const err = !f.home || !f.away ? "เลือกทีมเหย้าและทีมเยือน"
+    : f.home === f.away ? "ทีมเหย้ากับทีมเยือนต้องเป็นคนละทีม"
+    : !f.date || !f.time ? "ใส่วันที่และเวลาเตะ" : "";
+  const warns = [
+    busy(f.home) && nameOf(f.home) + " มีนัดในสัปดาห์ที่ " + f.round + " แล้ว",
+    busy(f.away) && nameOf(f.away) + " มีนัดในสัปดาห์ที่ " + f.round + " แล้ว",
+    dup > 0 && "สองทีมนี้เจอกันในโปรแกรมแล้ว " + dup + " นัด",
+  ].filter(Boolean);
+  const teamSelect = (k, label) => (
+    <Field label={label}>
+      <select value={f[k] || ""} onChange={e => set(k, e.target.value ? +e.target.value : "")} aria-label={label} className={INPUT}>
+        <option value="">— เลือกทีม —</option>
+        {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+      </select>
+    </Field>
+  );
   return (
     <Modal onClose={onClose}>
-      <ModalHead kicker={"สัปดาห์ที่ " + match.round} title="เลื่อนวัน / เวลาแข่ง" onClose={onClose} />
-      <div className="mb-5 truncate text-center font-display font-semibold italic text-ink">
-        {h && h.name} <span className="text-accent">VS</span> {a && a.name}
+      <ModalHead kicker={isNew ? "แอดมิน · เลือกคู่เอง" : "สัปดาห์ที่ " + match.round} title={isNew ? "เพิ่มนัดแข่ง" : "แก้นัดแข่ง"} onClose={onClose} />
+      {f.home && f.away && f.home !== f.away && (
+        <div className="mb-4 truncate text-center font-display font-semibold italic text-ink">
+          {nameOf(f.home)} <span className="text-accent">VS</span> {nameOf(f.away)}
+        </div>
+      )}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          {teamSelect("home", "ทีมเหย้า")}
+          {teamSelect("away", "ทีมเยือน")}
+        </div>
+        <div className="grid grid-cols-[84px_1fr_1fr] gap-3">
+          <Field label="สัปดาห์ที่">
+            <input type="number" min="1" max="99" value={f.round} aria-label="สัปดาห์ที่"
+              onChange={e => set("round", Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)))} className={INPUT} />
+          </Field>
+          <Field label="วันที่"><input type="date" value={f.date} onChange={e => set("date", e.target.value)} aria-label="วันที่" className={INPUT} /></Field>
+          <Field label="เวลาเตะ"><input type="time" value={f.time} onChange={e => set("time", e.target.value)} aria-label="เวลาเตะ" className={INPUT} /></Field>
+        </div>
+        {warns.map(w => <Note key={w} kind="warn">{w}</Note>)}
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="วันที่"><input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} /></Field>
-        <Field label="เวลาเตะ"><input type="time" value={time} onChange={e => setTime(e.target.value)} className={INPUT} /></Field>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <div>{!isNew && <Btn variant="danger" onClick={() => onDelete(match.id)}><Ic n="trash" size={14} /> ลบนัดนี้</Btn>}</div>
+        <div className="flex gap-2">
+          <Btn onClick={onClose}>ยกเลิก</Btn>
+          <Btn variant="primary" disabled={!!err} title={err || undefined}
+            onClick={() => onSave({ id: match.id, round: f.round, home: f.home, away: f.away, date: f.date, time: f.time })}>
+            <Ic n="check" size={15} /> {isNew ? "เพิ่มนัด" : "บันทึก"}
+          </Btn>
+        </div>
       </div>
-      <div className="mt-6 flex justify-end gap-3">
-        <Btn onClick={onClose}>ยกเลิก</Btn>
-        <Btn variant="primary" disabled={!date || !time} onClick={() => onSave(match.id, date, time)}><Ic n="check" size={15} /> บันทึก</Btn>
-      </div>
+      {err && (f.home || f.away) && <p className="mt-2 text-right text-xs text-muted">{err}</p>}
     </Modal>
   );
 }
@@ -2443,8 +2477,7 @@ function ShareModal({ blob, onClose }) {
 const PLAYER_SORTS = {
   G:    { label: "ดาวซัลโว",    fn: (a, b) => b.G - a.G || b.A - a.A || a.name.localeCompare(b.name), keep: s => s.G > 0 },
   A:    { label: "แอสซิสต์",    fn: (a, b) => b.A - a.A || b.G - a.G || a.name.localeCompare(b.name), keep: s => s.A > 0 },
-  avg:  { label: "คะแนนเฉลี่ย", fn: (a, b) => b.avg - a.avg || b.rN - a.rN || a.name.localeCompare(b.name), keep: s => s.avg != null },
-  motm: { label: "MOTM",       fn: (a, b) => b.motm - a.motm || (b.avg || 0) - (a.avg || 0), keep: s => s.motm > 0 },
+  motm: { label: "MOTM",       fn: (a, b) => b.motm - a.motm || b.apps - a.apps || a.name.localeCompare(b.name), keep: s => s.motm > 0 },
 };
 
 // imageSetter(team) → ฟังก์ชันใส่รูปการ์ด ถ้าคนที่ล็อกอินแก้ทีมนั้นได้ (ไม่งั้น null)
@@ -2464,13 +2497,12 @@ function PlayersTab({ stats, matches, teams, imageSetter }) {
       <SectionTitle icon="target" kicker="Player Stats" title="สถิตินักเตะ" />
       <Segmented value={sort} onChange={setSort} items={Object.entries(PLAYER_SORTS).map(([k, v]) => [k, v.label])} />
       <Card className="overflow-x-auto">
-        <div className="min-w-[620px]">
-          <div className="grid grid-cols-[40px_1fr_repeat(7,44px)] gap-2 border-b border-line/15 px-4 py-3 text-[11px] font-semibold text-muted">
+        <div className="min-w-[576px]">
+          <div className="grid grid-cols-[40px_1fr_repeat(6,44px)] gap-2 border-b border-line/15 px-4 py-3 text-[11px] font-semibold text-muted">
             <div>#</div><div>นักเตะ</div>
             <div className="text-center">นัด</div>
             <div className={"text-center " + hi("G")}>G</div>
             <div className={"text-center " + hi("A")}>A</div>
-            <div className={"text-center " + hi("avg")}>เฉลี่ย</div>
             <div className={"text-center " + hi("motm")}>MOTM</div>
             <div className="text-center">🟨</div>
             <div className="text-center">🟥</div>
@@ -2479,7 +2511,7 @@ function PlayersTab({ stats, matches, teams, imageSetter }) {
           {rows.map((s, i) => (
             <div key={s.key} role="button" tabIndex={0} aria-label={"ดูข้อมูลนักเตะ " + s.name} onClick={() => open(s)}
               onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(s); } }}
-              className={"grid cursor-pointer grid-cols-[40px_1fr_repeat(7,44px)] items-center gap-2 px-4 py-3 text-sm tabular-nums outline-none transition hover:bg-line/[0.05] focus-visible:bg-line/[0.08] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent " + (i < rows.length - 1 ? "border-b border-line/10" : "")}>
+              className={"grid cursor-pointer grid-cols-[40px_1fr_repeat(6,44px)] items-center gap-2 px-4 py-3 text-sm tabular-nums outline-none transition hover:bg-line/[0.05] focus-visible:bg-line/[0.08] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent " + (i < rows.length - 1 ? "border-b border-line/10" : "")}>
               <div className={"font-display text-base font-bold italic " + (i === 0 ? "text-accent" : "text-faint")}>{i === 0 ? "★" : i + 1}</div>
               <div className="flex min-w-0 items-center gap-2.5">
                 {s.pos ? <PosBadge pos={s.pos} /> : <span className="ef-pos bg-line/15 text-muted">—</span>}
@@ -2495,7 +2527,6 @@ function PlayersTab({ stats, matches, teams, imageSetter }) {
               <div className="text-center text-soft">{s.apps}</div>
               <div className="text-center font-display text-lg font-bold italic"><Hl>{s.G}</Hl></div>
               <div className="text-center text-soft">{s.A}</div>
-              <div className="text-center text-soft">{fmtAvg(s.avg)}</div>
               <div className="text-center text-soft">{s.motm || "–"}</div>
               <div className="text-center text-muted">{s.Y || "–"}</div>
               <div className="text-center text-muted">{s.R || "–"}</div>
@@ -2503,7 +2534,7 @@ function PlayersTab({ stats, matches, teams, imageSetter }) {
           ))}
         </div>
       </Card>
-      <p className="mt-3 text-xs text-muted">กดที่นักเตะเพื่อดูการ์ดและผลงานรายนัด · นัด = ลงเล่น · เฉลี่ย = คะแนนเฉลี่ยจากนัดที่แอดมิน/กรรมการให้คะแนน · MOTM = ผู้เล่นยอดเยี่ยมประจำนัด</p>
+      <p className="ef-halo mt-3 text-xs text-muted">กดที่นักเตะเพื่อดูการ์ดและผลงานรายนัด · นัด = ลงเล่น · MOTM = ผู้เล่นยอดเยี่ยมประจำนัด</p>
       {cur && cur.team && (
         <CardViewer p={curP} team={cur.team} slotPos={live ? slotOf(cur.team, live.id) : null} stats={cur} matches={matches} teams={teams}
           onSetImage={live && imageSetter ? imageSetter(cur.team) : null} onClose={() => setOpenKey(null)} />
@@ -2526,7 +2557,7 @@ function FriendsLeague() {
   const [teamModal, setTeamModal]     = useState(null);
   const [squadTeamId, setSquadTeamId] = useState(null);
   const [profileId, setProfileId]     = useState(null);
-  const [scheduleMatch, setScheduleMatch] = useState(null);
+  const [matchEdit, setMatchEdit]     = useState(null);   // {} = เพิ่มนัดใหม่ · match = แก้นัด
   const [fixtureOpen, setFixtureOpen]     = useState(false);
   const [shareBlob, setShareBlob]   = useState(null);
   const [sharing, setSharing]       = useState(false);
@@ -2853,9 +2884,17 @@ function FriendsLeague() {
     setEditMatch(null);
   };
 
-  const saveSchedule = (id, date, time) => {
-    setMatches(ms => ms.map(m => m.id === id ? { ...m, date, time } : m));
-    setScheduleMatch(null);
+  // แอดมิน: เพิ่มนัดเอง (เลือกคู่เอง ไม่สุ่ม) / แก้ทีม สัปดาห์ วันเวลา ของนัดที่ยังไม่แข่ง
+  const saveMatch = f => {
+    const info = { round: f.round, home: f.home, away: f.away, date: f.date, time: f.time };
+    setMatches(ms => f.id ? ms.map(m => m.id === f.id ? { ...m, ...info } : m)
+      : [...ms, { id: uniqueId(), ...info, hs: null, as: null, status: "scheduled", events: [] }]);
+    setMatchEdit(null);
+  };
+  const deleteMatch = id => {
+    if (!confirm("ลบนัดนี้ออกจากโปรแกรม?")) return;
+    setMatches(ms => ms.filter(m => m.id !== id));
+    setMatchEdit(null);
   };
 
   const createFixtures = o => {
@@ -2976,7 +3015,7 @@ function FriendsLeague() {
   const rounds = [...new Set(matches.map(m => m.round))].sort((a, b) => a - b);
   const matchRow = m => (
     <MatchRow key={m.id} m={m} teams={teams} canEdit={canEdit} isAdmin={isAdmin}
-      onResult={setEditMatch} onSchedule={setScheduleMatch} />
+      onResult={setEditMatch} onSchedule={setMatchEdit} />
   );
   const teamCard = t => (
     <TeamCard key={t.id} t={t} rank={rankOf(t.id)} row={rowOf(t.id)}
@@ -3215,7 +3254,7 @@ function FriendsLeague() {
                 })}
               </div>
             </Card>
-            <p className="mt-3 text-xs text-muted">▲▼ = อันดับที่ขยับจากก่อนสัปดาห์ล่าสุด · กดที่ทีมเพื่อดูโปรไฟล์และรายชื่อนักเตะ</p>
+            <p className="ef-halo mt-3 text-xs text-muted">▲▼ = อันดับที่ขยับจากก่อนสัปดาห์ล่าสุด · กดที่ทีมเพื่อดูโปรไฟล์และรายชื่อนักเตะ</p>
           </div>
         )}
 
@@ -3223,11 +3262,16 @@ function FriendsLeague() {
         {tab === "matches" && (
           <div className="fl-enter">
             <SectionTitle icon="calendar" kicker="Fixtures & Results" title="โปรแกรมการแข่งขัน"
-              action={isAdmin ? <Btn variant="primary" onClick={() => setFixtureOpen(true)}><Ic n="wand" size={14} /> จัดโปรแกรมอัตโนมัติ</Btn> : null} />
+              action={isAdmin ? (
+                <div className="flex flex-wrap gap-2">
+                  <Btn variant="primary" onClick={() => setMatchEdit({})}><Ic n="plus" size={14} /> เพิ่มนัดเอง</Btn>
+                  <Btn onClick={() => setFixtureOpen(true)}><Ic n="wand" size={14} /> จัดโปรแกรมอัตโนมัติ</Btn>
+                </div>
+              ) : null} />
 
             {matches.length === 0 && (
               <Card className="py-12 text-center text-sm text-muted">
-                ยังไม่มีโปรแกรมแข่ง{isAdmin ? " — กด “จัดโปรแกรมอัตโนมัติ” เพื่อเริ่ม" : " — รอแอดมินจัดโปรแกรม"}
+                ยังไม่มีโปรแกรมแข่ง{isAdmin ? " — กด “เพิ่มนัดเอง” เพื่อเลือกคู่เอง หรือ “จัดโปรแกรมอัตโนมัติ”" : " — รอแอดมินจัดโปรแกรม"}
               </Card>
             )}
 
@@ -3235,7 +3279,7 @@ function FriendsLeague() {
               const list = matches.filter(m => m.round === round).sort(byPlayOrder);
               return (
                 <div key={round} className="mb-7">
-                  <div className="mb-3 flex items-baseline gap-2">
+                  <div className="ef-halo mb-3 flex items-baseline gap-2">
                     <span className="font-display text-base font-bold italic text-ink">สัปดาห์ที่ {round}</span>
                     <span className="text-xs text-muted">{fmtDay(list[0])}</span>
                   </div>
@@ -3266,7 +3310,7 @@ function FriendsLeague() {
       </main>
 
       {/* ═══ FOOTER ═══ */}
-      <footer className="relative border-t border-line/10 py-7 text-center text-xs text-muted">
+      <footer className="ef-halo relative border-t border-line/10 py-7 text-center text-xs text-muted">
         <div>Friends League · eFootball 2027 Mobile · บันทึกผลด้วยมือ (ไม่เชื่อมต่อ Konami API)</div>
         <div className="mt-1">{CLOUD ? "ข้อมูลออนไลน์ · ทุกเครื่องเห็นข้อมูลเดียวกัน" : "โหมดเครื่องเดียว · ข้อมูลอยู่ในเบราว์เซอร์นี้เท่านั้น (ตั้งค่า Firebase เพื่อใช้ร่วมกันทุกเครื่อง)"}</div>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
@@ -3313,7 +3357,9 @@ function FriendsLeague() {
           onSetImage={canEditSquad(profileTeam) ? (pid, img) => setPlayerImage(profileTeam.id, pid, img) : null}
           onClose={() => setProfileId(null)} />
       )}
-      {scheduleMatch && <ScheduleModal match={scheduleMatch} teams={teams} onClose={() => setScheduleMatch(null)} onSave={saveSchedule} />}
+      {matchEdit && (
+        <MatchModal match={matchEdit} teams={teams} matches={matches} onClose={() => setMatchEdit(null)} onSave={saveMatch} onDelete={deleteMatch} />
+      )}
       {fixtureOpen && (
         <FixtureModal teams={teams} matchCount={matches.length} doneCount={done.length}
           onClose={() => setFixtureOpen(false)} onCreate={createFixtures} />
