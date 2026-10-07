@@ -1,13 +1,19 @@
 /* ════════════════════════════════════════════════════════════════
-   ตั้งค่า Google Drive (ดูวิธีสร้างทีละขั้นใน README › Google Drive)
-   ค่าเหล่านี้ "ไม่ใช่รหัสลับ" — เป็นค่าสาธารณะที่ Google ออกให้เว็บฝั่งเบราว์เซอร์
-   ความปลอดภัยมาจากการจำกัดโดเมนใน Google Cloud Console:
-     - OAuth Client ID → Authorized JavaScript origins
-     - API key        → Application restrictions: Websites + API restrictions: Google Picker API
-   ปล่อยว่างไว้ = ปิดฟีเจอร์ Google Drive (แอปยังใช้งานได้ปกติ เก็บข้อมูลในเครื่อง)
+   ตั้งค่า Firebase (ดูวิธีสร้างทีละขั้นใน README › ข้อมูลออนไลน์ (Firebase))
+   คัดลอกจาก Firebase console › Project settings › Your apps › firebaseConfig
+   ค่าเหล่านี้ "ไม่ใช่รหัสลับ" — ทุกเว็บที่ใช้ Firebase แสดงค่านี้ในหน้าเว็บอยู่แล้ว
+   ความปลอดภัยมาจาก:
+     - กฎในไฟล์ firestore.rules (วางใน Firestore Database › Rules)
+     - Authentication › Settings › Authorized domains (โดเมนที่ล็อกอินได้)
+   ปล่อยว่างไว้ = โหมดเครื่องเดียว (ข้อมูลอยู่ในเบราว์เซอร์นั้น ไม่แชร์กับเครื่องอื่น)
    ════════════════════════════════════════════════════════════════ */
 window.FL_CONFIG = {
-  googleClientId: "",   // OAuth 2.0 Client ID ชนิด Web application เช่น 1234567890-abc.apps.googleusercontent.com
-  googleApiKey: "",     // API key สำหรับ Google Picker (หน้าต่างเลือกไฟล์)
-  googleAppId: "",      // Project number ของ Google Cloud project (ตัวเลขล้วน)
+  firebase: {
+    apiKey: "AIzaSyC3lzgxRLXXP_JlkoHAU4pJaUEtvwXMPY4",
+    authDomain: "friends-league-a626c.firebaseapp.com",
+    projectId: "friends-league-a626c",
+    storageBucket: "friends-league-a626c.firebasestorage.app",
+    messagingSenderId: "75355140625",
+    appId: "1:75355140625:web:1ac54a921e6a34eed9b7b0",
+  },
 };

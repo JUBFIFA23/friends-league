@@ -1,0 +1,65 @@
+rules_version = '2';
+
+// กฎความปลอดภัยของ Friends League (Cloud Firestore)
+// วางทั้งไฟล์ใน Firebase console › Firestore Database › Rules แล้วกด Publish
+//
+// - ทุกคนดูทีม / นัด / รูปการ์ดได้ (ไม่ต้องล็อกอิน)
+// - เจ้าของลีก = คนแรกที่กด "ตั้งค่าแอดมิน" · ตั้งแล้วเปลี่ยนไม่ได้
+// - แอดมิน: แก้ได้ทุกอย่าง · ผู้จัดการทีม: แก้แค่ทีมตัวเอง · กรรมการ: แก้แค่ผลการแข่ง
+// - สิทธิ์อยู่ใน users/{uid} ซึ่งแอดมินเท่านั้นที่แก้ได้ → ผู้ใช้ตั้งตัวเองเป็นแอดมินไม่ได้
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function myDoc() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function role() { return signedIn() && exists(myDoc()) ? get(myDoc()).data.role : ""; }
+    function isAdmin() { return role() == "admin"; }
+    function ownerDoc() { return /databases/$(database)/documents/meta/owner; }
+    function isOwner(uid) { return exists(ownerDoc()) && get(ownerDoc()).data.uid == uid; }
+
+    // เจ้าของลีก: สร้างได้ครั้งเดียว (มีแล้ว → สร้างทับไม่ได้) และไม่มีใครแก้/ลบได้
+    match /meta/owner {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(["uid", "at"])
+        && request.resource.data.uid == request.auth.uid;
+    }
+
+    // บัญชีผู้ใช้ (ชื่อ / บทบาท / ทีมที่ดูแล) — รหัสผ่านอยู่ใน Firebase Authentication ไม่ได้อยู่ที่นี่
+    match /users/{uid} {
+      allow read: if role() != "" || (signedIn() && uid == request.auth.uid);
+      allow create: if isAdmin()
+        || (signedIn() && uid == request.auth.uid && isOwner(uid) && request.resource.data.role == "admin");
+      allow update: if isAdmin() && (!isOwner(uid) || request.resource.data.role == "admin");
+      allow delete: if isAdmin() && !isOwner(uid);
+    }
+
+    match /teams/{teamId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (role() == "manager"
+            && get(myDoc()).data.teamId == resource.data.id
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "kit", "players", "formation", "lineup"]));
+    }
+
+    match /matches/{matchId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (role() == "referee"
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hs", "as", "status", "events", "perf", "motm", "formations"]));
+    }
+
+    // รูปการ์ด: ชื่อเอกสาร = hash ของรูป → สร้างได้ แต่แก้ทับไม่ได้
+    match /images/{imageId} {
+      allow read: if true;
+      allow create: if (role() == "admin" || role() == "manager")
+        && request.resource.data.keys().hasOnly(["data", "at"])
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < 400000
+        && request.resource.data.data.matches("data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+");
+      allow delete: if isAdmin();
+    }
+  }
+}

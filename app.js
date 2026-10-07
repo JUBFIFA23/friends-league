@@ -158,7 +158,7 @@ function withSquad(team) {
 }
 const namedPlayers = t => (t && t.players ? t.players : []).filter(p => (p.name || "").trim());
 const newPlayerId = teamId => teamId + "-" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
-// id ตัวเลขที่ไม่ชนกันแม้หลายเครื่องสร้างพร้อมกัน (ข้อมูลซิงก์ผ่าน Google Drive)
+// id ตัวเลขที่ไม่ชนกันแม้หลายเครื่องสร้างพร้อมกัน (ข้อมูลออนไลน์ใช้ร่วมกันหลายเครื่อง)
 let lastId = 0;
 const uniqueId = () => (lastId = Math.max(lastId + 1, Date.now() * 100 + Math.floor(Math.random() * 100)));
 
@@ -179,7 +179,7 @@ const ovrOk = v => v === "" || v == null || (Number.isInteger(+v) && +v >= OVR_M
 // EFHUB ไม่มี API สาธารณะ → เก็บแค่ลิงก์การ์ด (efhub.com/players/<id>) + ปุ่มค้นหาผ่าน Google
 const EFHUB_RE = /^https:\/\/(?:www\.)?efhub\.com\/(?:[a-z]{2}(?:-[A-Z]{2})?\/)?players\/\d+\/?(?:[?#].*)?$/;
 const efhubOk = url => !url || EFHUB_RE.test(url.trim());
-// ลิงก์ที่ให้กดได้ต้องเป็นหน้าการ์ด EFHUB จริงเท่านั้น (ข้อมูลจาก Drive / Import อาจถูกแก้มา เช่น javascript:)
+// ลิงก์ที่ให้กดได้ต้องเป็นหน้าการ์ด EFHUB จริงเท่านั้น (ข้อมูลออนไลน์ / Import อาจถูกแก้มา เช่น javascript:)
 const efhubHref = url => url && EFHUB_RE.test(url.trim()) ? url.trim() : "";
 const efhubSearch = name => "https://www.google.com/search?q=" + encodeURIComponent("site:efhub.com/players " + name);
 
@@ -415,8 +415,8 @@ function buildFixtures(teams, o) {
     })));
 }
 
-/* ══════════════════════════ AUTH (บัญชีเก็บในเบราว์เซอร์เครื่องนี้) ══════════════════════════
-   ไม่มีเซิร์ฟเวอร์ → กันคนที่ยืมเครื่องไปแก้ผลได้ แต่ไม่ใช่ความปลอดภัยระดับเซิร์ฟเวอร์
+/* ══════════════════════════ AUTH (โหมดเครื่องเดียว: บัญชีเก็บในเบราว์เซอร์เครื่องนี้) ══════════════════════════
+   โหมดออนไลน์ใช้ Firebase Authentication แทน (ดู CLOUD) · ส่วนนี้กันคนที่ยืมเครื่องไปแก้ผลได้ แต่ไม่ใช่ความปลอดภัยระดับเซิร์ฟเวอร์
    รหัสผ่านไม่เก็บตรง ๆ: เก็บแค่ salt + SHA-256 วนซ้ำ (เขียนเองเพราะ crypto.subtle ใช้ไม่ได้
    เมื่อเปิดผ่าน http://IP-ในวง-LAN จากมือถือ) · ห้ามใส่รหัสผ่านตั้งต้นในโค้ดนี้           */
 const SHA_K = (() => {
@@ -492,16 +492,16 @@ function makeUser(f, users) {
 const assignTeam = (users, userId, teamId) => users.map(u =>
   u.id === userId ? { ...u, teamId } : (teamId && u.teamId === teamId ? { ...u, teamId: null } : u));
 
-/* ══════════════════════════ GOOGLE DRIVE (ข้อมูลร่วมกันทุกเครื่อง) ══════════════════════════
-   ทั้งลีกเก็บเป็นไฟล์ JSON ไฟล์เดียวใน Drive ของแอดมิน แล้วแชร์ให้เพื่อนแบบแก้ไขได้
-   - สิทธิ์ drive.file: แอปเห็นเฉพาะไฟล์ที่แอปสร้าง หรือไฟล์ที่ผู้ใช้เลือกเองผ่าน Google Picker
-   - ทุกคนที่มีไฟล์แก้ได้ทุกอย่างในไฟล์ (รวมรายชื่อบัญชี) → เหมาะกับกลุ่มเพื่อนที่ไว้ใจกัน
-   - ตั้งค่า Client ID / API key / Project number ใน config.js                                  */
+/* ══════════════════════════ CLOUD (Firebase: ข้อมูลกลางของทุกเครื่อง) ══════════════════════════
+   ใส่ค่า firebase ใน config.js → ทั้งลีกเก็บบน Cloud Firestore · ล็อกอินด้วย Firebase Authentication
+   - ทุกคนดูข้อมูลได้โดยไม่ต้องล็อกอิน · การเขียนทุกครั้งถูกตรวจสิทธิ์ที่เซิร์ฟเวอร์ (ไฟล์ firestore.rules)
+   - Firebase ล็อกอินด้วยอีเมล → แปลงชื่อผู้ใช้เป็นอีเมลภายใน (ชื่อ@LOGIN_DOMAIN) ไม่มีการส่งอีเมลจริง
+   - ไม่ใส่ค่า firebase → ใช้แบบเครื่องเดียว (เก็บในเบราว์เซอร์) เหมือนเดิม                              */
 const cfg = () => window.FL_CONFIG || {};
-const driveReady = () => { const c = cfg(); return !!(c.googleClientId && c.googleApiKey && c.googleAppId); };
-const DRIVE_FILE_NAME = "Friends League.json";
-const DRIVE_API = "https://www.googleapis.com";
-const DOC_APP = "friends-league";
+const cloudConfig = () => { const f = cfg().firebase; return f && f.apiKey && f.projectId && f.appId ? f : null; };
+const CLOUD = !!cloudConfig();
+const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/12.19.0/";
+const LOGIN_DOMAIN = "friends-league.example.com";   // example.com สงวนไว้สำหรับทดสอบ → ไม่มีกล่องอีเมลจริง
 
 function loadScript(src) {
   return new Promise((res, rej) => {
@@ -510,133 +510,76 @@ function loadScript(src) {
     const s = document.createElement("script");
     s.src = src; s.async = true;
     s.onload = () => { s.dataset.ready = "1"; res(); };
-    s.onerror = () => rej(Object.assign(new Error("โหลดสคริปต์ Google ไม่ได้"), { net: true }));
+    s.onerror = () => rej(Object.assign(new Error("โหลดสคริปต์ไม่ได้"), { net: true }));
     document.head.appendChild(s);
   });
 }
 
-const Drive = {
-  token: "", exp: 0,
-  restore() {
-    try { const t = JSON.parse(sessionStorage.getItem("fl_gtoken") || "null"); if (t && t.exp > Date.now()) { this.token = t.token; this.exp = t.exp; } } catch (e) {}
+const Cloud = {
+  app: null, auth: null, db: null, booting: null,
+  // โหลด Firebase (ครั้งเดียว) → เปิดแคชในเครื่อง: เปิดแอปเร็วขึ้น และแก้ไขตอนเน็ตหลุดได้ (ส่งขึ้นเมื่อกลับมาออนไลน์)
+  init() {
+    if (!this.booting) this.booting = (async () => {
+      if (!window.firebase) {
+        await loadScript(FIREBASE_SDK + "firebase-app-compat.js");
+        await Promise.all(["auth", "firestore"].map(n => loadScript(FIREBASE_SDK + "firebase-" + n + "-compat.js")));
+      }
+      this.app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cloudConfig());
+      this.auth = this.app.auth();
+      this.db = this.app.firestore();
+      try { await this.db.enablePersistence({ synchronizeTabs: true }); } catch (e) {}
+      return this;
+    })();
+    return this.booting;
   },
-  valid() { return !!this.token && Date.now() < this.exp; },
-  forget() { this.token = ""; this.exp = 0; try { sessionStorage.removeItem("fl_gtoken"); } catch (e) {} },
-  // ต้องเรียกจากการกดปุ่ม (เบราว์เซอร์บล็อกป๊อปอัปที่ไม่ได้มาจากการกด)
-  async signIn() {
-    await loadScript("https://accounts.google.com/gsi/client");
-    await new Promise((res, rej) => {
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: cfg().googleClientId,
-        scope: "https://www.googleapis.com/auth/drive.file",
-        callback: r => {
-          if (r.error) return rej(Object.assign(new Error(r.error), { auth: true }));
-          this.token = r.access_token;
-          this.exp = Date.now() + (Number(r.expires_in || 3600) - 60) * 1000;
-          try { sessionStorage.setItem("fl_gtoken", JSON.stringify({ token: this.token, exp: this.exp })); } catch (e) {}
-          res();
-        },
-        error_callback: e => rej(Object.assign(new Error((e && e.type) || "popup_closed"), { popup: true })),
-      });
-      client.requestAccessToken({ prompt: "" });
-    });
-  },
-  async call(path, opts = {}) {
-    if (!this.valid()) throw Object.assign(new Error("auth"), { auth: true });
-    let r;
-    try { r = await fetch(DRIVE_API + path, { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + this.token } }); }
-    catch (e) { throw Object.assign(new Error("network"), { net: true }); }
-    if (r.status === 401) { this.forget(); throw Object.assign(new Error("auth"), { auth: true }); }
-    if (!r.ok) throw Object.assign(new Error("drive " + r.status), { status: r.status });
-    return r.json();
-  },
-  meta(id)  { return this.call("/drive/v3/files/" + id + "?fields=id,name,version,modifiedTime,webViewLink,capabilities/canEdit,owners/displayName"); },
-  read(id)  { return this.call("/drive/v3/files/" + id + "?alt=media"); },
-  // อัปโหลดแบบธรรมดาได้ไม่เกิน 5MB → เช็กก่อนส่ง (รูปการ์ดเยอะเกินจะติดตรงนี้)
-  body(doc) {
-    const json = JSON.stringify(doc);
-    if (new Blob([json]).size > 4.8 * 1024 * 1024) throw Object.assign(new Error("too big"), { tooBig: true });
-    return json;
-  },
-  write(id, doc) {
-    return this.call("/upload/drive/v3/files/" + id + "?uploadType=media&fields=id,version",
-      { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: this.body(doc) });
-  },
-  create(doc) {
-    const b = "fl" + Date.now();
-    const body = "--" + b + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: "application/json" }) +
-      "\r\n--" + b + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + this.body(doc) + "\r\n--" + b + "--";
-    return this.call("/upload/drive/v3/files?uploadType=multipart&fields=id,version", { method: "POST", headers: { "Content-Type": "multipart/related; boundary=" + b }, body });
-  },
-  // แชร์แบบแก้ไขได้ · Google ส่งอีเมลแจ้งเพื่อนให้เอง
-  share(id, email) {
-    return this.call("/drive/v3/files/" + id + "/permissions?sendNotificationEmail=true&fields=id",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "writer", type: "user", emailAddress: email }) });
-  },
-  // หน้าต่าง Google Picker ให้เพื่อนเลือกไฟล์ลีกที่ถูกแชร์มา (ทำให้แอปได้สิทธิ์อ่าน/เขียนไฟล์นั้น)
-  async pick() {
-    await loadScript("https://apis.google.com/js/api.js");
-    await new Promise(res => gapi.load("picker", res));
-    return new Promise(res => {
-      const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
-        .setMimeTypes("application/json").setMode(google.picker.DocsViewMode.LIST).setQuery("Friends League");
-      new google.picker.PickerBuilder()
-        .setAppId(cfg().googleAppId).setDeveloperKey(cfg().googleApiKey).setOAuthToken(this.token)
-        .addView(view).setTitle("เลือกไฟล์ลีก (" + DRIVE_FILE_NAME + ")")
-        .setCallback(d => {
-          if (d.action === google.picker.Action.PICKED) res(d.docs[0].id);
-          else if (d.action === google.picker.Action.CANCEL) res(null);
-        })
-        .build().setVisible(true);
-    });
+  email: username => normUser(username) + "@" + LOGIN_DOMAIN,
+  // แอดมินสร้างบัญชีให้เพื่อนผ่าน Firebase app ตัวที่สอง → แอดมินไม่หลุดจากระบบ
+  // writeDoc(uid) ไม่ผ่าน → ลบบัญชีที่เพิ่งสร้างทิ้ง (ไม่ทิ้งบัญชีค้าง)
+  async addAccount(username, password, writeDoc) {
+    const second = firebase.initializeApp(cloudConfig(), "add-" + Date.now());
+    try {
+      await second.auth().setPersistence(firebase.auth.Auth.Persistence.NONE);
+      const cred = await second.auth().createUserWithEmailAndPassword(this.email(username), password);
+      try { await writeDoc(cred.user.uid); }
+      catch (e) { await cred.user.delete().catch(() => {}); throw e; }
+      return cred.user.uid;
+    } finally { second.delete().catch(() => {}); }
   },
 };
-Drive.restore();
 
-// images = รูปการ์ดที่นักเตะในไฟล์ใช้อยู่ { id: dataURL } → เครื่องอื่นได้รูปไปด้วย
-const makeDoc = (data, by, images) => ({ app: DOC_APP, schema: 2, savedAt: new Date().toISOString(), savedBy: by || "", ...data, images: images || {} });
-const validDoc = d => !!d && d.app === DOC_APP && Array.isArray(d.teams) && Array.isArray(d.matches);
-const docData = d => ({ teams: d.teams.map(withSquad), matches: d.matches, users: Array.isArray(d.users) ? d.users : [] });
-const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const CLOUD_ERRORS = {
+  "auth/invalid-credential": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+  "auth/invalid-login-credentials": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+  "auth/wrong-password": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+  "auth/user-not-found": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+  "auth/invalid-email": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+  "auth/too-many-requests": "ลองผิดหลายครั้งเกินไป รอสักครู่แล้วลองใหม่",
+  "auth/email-already-in-use": "ชื่อผู้ใช้นี้มีคนใช้แล้ว",
+  "auth/weak-password": "รหัสผ่านต้องมีอย่างน้อย 6 ตัว",
+  "auth/requires-recent-login": "ล็อกอินใหม่อีกครั้งก่อนเปลี่ยนรหัสผ่าน",
+  "auth/network-request-failed": "เชื่อมต่อไม่ได้ ตรวจอินเทอร์เน็ต",
+  "auth/operation-not-allowed": "ยังไม่ได้เปิดล็อกอินแบบ Email/Password ใน Firebase (ดู README)",
+  "auth/unauthorized-domain": "เว็บนี้ยังไม่อยู่ใน Authorized domains ของ Firebase (ดู README)",
+  "auth/admin-restricted-operation": "Firebase ปิดการสร้างบัญชีไว้ — เปิด “Enable create (sign-up)” ใน Authentication › Settings",
+  "permission-denied": "ไม่มีสิทธิ์ทำรายการนี้",
+  "unavailable": "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจอินเทอร์เน็ต",
+};
+const cloudError = e => (e && CLOUD_ERRORS[e.code]) ||
+  (e && e.net ? "โหลดระบบออนไลน์ไม่ได้ ตรวจอินเทอร์เน็ตแล้วรีเฟรช" : "เกิดข้อผิดพลาด" + (e && (e.code || e.message) ? " (" + (e.code || e.message) + ")" : ""));
 
-/* รวมการแก้ไขสองฝั่งแบบ 3 ทาง (base = ข้อมูลตอนซิงก์ครั้งก่อน) ทีละรายการตาม id
-   - แก้ฝั่งเดียว → เอาฝั่งที่แก้ · แก้ทั้งสองฝั่ง → เอาของเครื่องนี้
-   - เพิ่มใหม่ฝั่งไหนก็เก็บ · ลบฝั่งหนึ่งแต่อีกฝั่งไม่ได้แก้ → ลบ */
-function merge3(base, local, remote) {
-  const map = arr => new Map((arr || []).map(x => [x.id, x]));
-  const B = map(base), L = map(local), R = map(remote);
-  const ids = [...L.keys()].concat([...R.keys()].filter(id => !L.has(id)));
-  const out = [];
-  ids.forEach(id => {
-    const b = B.get(id), l = L.get(id), r = R.get(id);
-    if (l && r) out.push(b && sameJson(l, b) ? r : l);
-    else if (l) { if (!b || !sameJson(l, b)) out.push(l); }
-    else if (r) { if (!b || !sameJson(r, b)) out.push(r); }
-  });
-  return out;
-}
-const mergeData = (base, local, remote) => ({
-  teams:   merge3(base.teams, local.teams, remote.teams),
-  matches: merge3(base.matches, local.matches, remote.matches),
-  users:   merge3(base.users, local.users, remote.users),
-});
-
-const driveError = e =>
-  e.auth ? "ต้องเชื่อมต่อ Google อีกครั้ง (สิทธิ์หมดอายุทุก 1 ชั่วโมง)" :
-  e.popup ? "หน้าต่างล็อกอิน Google ถูกปิดหรือถูกบล็อก — อนุญาตป๊อปอัปแล้วลองใหม่" :
-  e.readonly ? "ไฟล์นี้คุณมีสิทธิ์ดูอย่างเดียว — ให้แอดมินแชร์แบบแก้ไขได้" :
-  e.badFile ? "ไฟล์นี้ไม่ใช่ไฟล์ลีก Friends League" :
-  e.status === 404 ? "หาไฟล์ไม่เจอ หรือบัญชี Google นี้ไม่มีสิทธิ์เข้าถึง" :
-  e.status === 403 ? "Google ไม่อนุญาต (ตรวจการตั้งค่า API / สิทธิ์ไฟล์)" :
-  e.tooBig ? "ไฟล์ลีกใหญ่เกิน 5MB (รูปการ์ดเยอะเกินไป) — ลบรูปการ์ดบางใบแล้วลองใหม่" :
-  e.net ? "เชื่อมต่อไม่ได้ ตรวจอินเทอร์เน็ต" : "ซิงก์ไม่สำเร็จ (" + e.message + ")";
+// เทียบข้อมูลแบบไม่สนลำดับ key (Firestore คืน object ที่เรียง key ไม่เหมือนในแอป)
+const stable = v => JSON.stringify(v, (k, x) => x && typeof x === "object" && !Array.isArray(x)
+  ? Object.keys(x).sort().reduce((o, key) => { o[key] = x[key]; return o; }, {}) : x);
+// Firestore ไม่รับ undefined → แปลงผ่าน JSON ก่อนบันทึก
+const plain = v => JSON.parse(JSON.stringify(v));
 
 /* ══════════════════════════ CARD IMAGES (รูปการ์ดนักเตะ) ══════════════════════════
    localStorage จุแค่ ~5MB → รูปเก็บใน IndexedDB ของเบราว์เซอร์แทน
    นักเตะเก็บแค่ player.img = id ของรูป (มาจาก hash ของเนื้อรูป → รูปเดียวกันได้ id เดียวกัน)
-   ย่อเหลือกว้าง 200px แบบ JPEG (~20–30KB ต่อใบ) · ซิงก์ Drive / Export JSON จะแนบรูปไปด้วย */
+   ย่อเหลือกว้าง 200px แบบ JPEG (~20–30KB ต่อใบ) · ออนไลน์เก็บที่ images/{id} · Export JSON แนบรูปไปด้วย */
 const CARD_W = 200, CARD_H_MAX = 300;
 const IMG_DATA_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const IMG_ID_RE = /^c[0-9a-f]{24}$/;
 const ImgContext = React.createContext({ images: {}, putImage: async () => "" });
 
 const ImgDB = {
@@ -1396,7 +1339,8 @@ function TeamModal({ team, users, onClose, onSave, onDelete, onSquad }) {
   const set = (k, v) => { setF({ ...f, [k]: v }); setErr(""); };
   const submit = () => {
     if (!(f.name || "").trim()) return setErr("กรอกชื่อทีม");
-    onSave({ ...f, name: f.name.trim().slice(0, 24) }, mgr ? +mgr : null);
+    const m = managers.find(u => String(u.id) === mgr);
+    onSave({ ...f, name: f.name.trim().slice(0, 24) }, m ? m.id : null);
   };
 
   return (
@@ -1474,7 +1418,7 @@ function SquadEditor({ team, onSave }) {
     const t = withSquad(team);
     setList(fresh()); setFormation(t.formation); setLineup(t.lineup); setMsg(null);
   }, [team.id]);
-  // รูปการ์ดที่เปลี่ยนจากที่อื่นระหว่างเปิดหน้านี้ (แตะนักเตะในโปรไฟล์ / ซิงก์ Drive) → ใส่เข้าแบบร่างด้วย
+  // รูปการ์ดที่เปลี่ยนจากที่อื่นระหว่างเปิดหน้านี้ (แตะนักเตะในโปรไฟล์ / เครื่องอื่นแก้) → ใส่เข้าแบบร่างด้วย
   // ไม่งั้นกด "บันทึกรายชื่อ" แล้วรูปใหม่โดนค่าเก่าทับ (ยกเว้นคนที่เปลี่ยนรูปในหน้านี้เองแล้ว)
   const imgKey = (team.players || []).map(p => p.id + "=" + (p.img || "")).join(",");
   const lastImgs = useRef(null);
@@ -1697,19 +1641,26 @@ function SquadModal({ team, onClose, onSave }) {
 // ใส่รหัสผิด 5 ครั้ง → ชื่อผู้ใช้นั้นพัก 30 วิ (นับต่อแม้ปิด/เปิดหน้าต่างใหม่ · รีเซ็ตเมื่อรีโหลดหน้า)
 const LOGIN_GUARD = {};
 
-// ยังไม่มีบัญชีเลย → สร้างแอดมินคนแรก · มีแล้ว → ล็อกอิน
-function LoginModal({ users, onClose, onLogin, onSetup }) {
-  const setup = users.length === 0;
+// setup = ยังไม่มีแอดมิน → สร้างแอดมินคนแรก · ไม่งั้นล็อกอิน
+// cloud: ตรวจรหัสที่ Firebase (onLogin/onSetup คืน Promise ของข้อความผิดพลาด "" = สำเร็จ)
+function LoginModal({ users, setup, cloud, onClose, onLogin, onSetup }) {
   const [f, setF] = useState({ name: "", username: "", password: "", confirm: "" });
   const [err, setErr] = useState("");
   const [help, setHelp] = useState(false);
+  const [busy, setBusy] = useState(false);
   const set = (k, v) => { setF({ ...f, [k]: v }); setErr(""); };
+  const run = async job => { setBusy(true); const msg = await job; setBusy(false); if (msg) setErr(msg); };
 
   const submit = e => {
     e.preventDefault();
+    if (busy) return;
     if (setup) {
       const msg = validateAccount(f, users, { needConfirm: true });
-      return msg ? setErr(msg) : onSetup(f);
+      return msg ? setErr(msg) : run(onSetup(f));
+    }
+    if (cloud) {
+      if (!normUser(f.username) || !f.password) return setErr("กรอกชื่อผู้ใช้และรหัสผ่าน");
+      return run(onLogin(f));
     }
     const name = normUser(f.username);
     const g = LOGIN_GUARD[name] || (LOGIN_GUARD[name] = { fails: 0, until: 0 });
@@ -1734,7 +1685,9 @@ function LoginModal({ users, onClose, onLogin, onSetup }) {
           </div>
           <h3 className="font-display text-2xl font-bold italic text-ink">{setup ? "ตั้งค่าแอดมินคนแรก" : "เข้าสู่ระบบ"}</h3>
           <p className="mt-1 text-sm text-muted">
-            {setup ? "ยังไม่มีบัญชีในเครื่องนี้ สร้างบัญชีแอดมินเพื่อเริ่มจัดการลีก" : "แอดมิน · กรรมการ · ผู้จัดการทีม"}
+            {!setup ? "แอดมิน · กรรมการ · ผู้จัดการทีม"
+              : cloud ? "ลีกนี้ยังไม่มีแอดมิน · คนแรกที่สร้างจะเป็นเจ้าของลีก (ทำได้ครั้งเดียว)"
+              : "ยังไม่มีบัญชีในเครื่องนี้ สร้างบัญชีแอดมินเพื่อเริ่มจัดการลีก"}
           </p>
         </div>
 
@@ -1759,8 +1712,9 @@ function LoginModal({ users, onClose, onLogin, onSetup }) {
           {err && <Note>{err}</Note>}
         </div>
 
-        <Btn type="submit" variant="primary" className="mt-5 w-full justify-center py-2.5">
-          <Ic n={setup ? "check" : "login"} size={15} /> {setup ? "สร้างบัญชีแอดมิน" : "เข้าสู่ระบบ"}
+        <Btn type="submit" variant="primary" disabled={busy} className="mt-5 w-full justify-center py-2.5">
+          <Ic n={setup ? "check" : "login"} size={15} />
+          {busy ? (setup ? "กำลังสร้างบัญชี…" : "กำลังเข้าสู่ระบบ…") : setup ? "สร้างบัญชีแอดมิน" : "เข้าสู่ระบบ"}
         </Btn>
 
         {!setup && (
@@ -1770,15 +1724,21 @@ function LoginModal({ users, onClose, onLogin, onSetup }) {
         )}
         {help && (
           <p className="mt-2 rounded-lg bg-sunken p-3 text-xs leading-relaxed text-muted">
-            กรรมการ/ผู้จัดการทีมลืมรหัส → ให้แอดมินกด “ตั้งรหัสใหม่” ในเมนูบัญชี › จัดการผู้ใช้<br />
-            แอดมินลืมรหัสเอง → ต้องล้างข้อมูลเว็บไซต์นี้ในเบราว์เซอร์ ข้อมูลลีกในเครื่องนี้จะหายด้วย (กด Export JSON เก็บไว้ก่อน)
+            {cloud ? (
+              <>กรรมการ/ผู้จัดการทีมลืมรหัส → ให้แอดมินลบบัญชีเดิม แล้วสร้างบัญชีใหม่ให้ (ต้องใช้ชื่อผู้ใช้ใหม่)<br />
+                แอดมินลืมรหัสเอง → ดูวิธีกู้คืนใน README หัวข้อ Firebase</>
+            ) : (
+              <>กรรมการ/ผู้จัดการทีมลืมรหัส → ให้แอดมินกด “ตั้งรหัสใหม่” ในเมนูบัญชี › จัดการผู้ใช้<br />
+                แอดมินลืมรหัสเอง → ต้องล้างข้อมูลเว็บไซต์นี้ในเบราว์เซอร์ ข้อมูลลีกในเครื่องนี้จะหายด้วย (กด Export JSON เก็บไว้ก่อน)</>
+            )}
           </p>
         )}
         <button type="button" onClick={onClose} className="mt-4 w-full text-center text-xs text-muted hover:text-ink">
           ดูแบบผู้ชม (ไม่ต้องล็อกอิน)
         </button>
         <p className="mt-4 border-t border-line/15 pt-3 text-center text-[11px] leading-relaxed text-muted">
-          บัญชีเก็บในเบราว์เซอร์เครื่องนี้เท่านั้น · รหัสผ่านถูกเข้ารหัส ไม่เก็บตัวจริง
+          {cloud ? "บัญชีเก็บบนเซิร์ฟเวอร์ Firebase · ใช้ได้ทุกเครื่อง · ไม่มีใครเห็นรหัสผ่านของคุณ"
+            : "บัญชีเก็บในเบราว์เซอร์เครื่องนี้เท่านั้น · รหัสผ่านถูกเข้ารหัส ไม่เก็บตัวจริง"}
         </p>
       </form>
     </Modal>
@@ -1790,10 +1750,14 @@ function ChangePassword({ username, onSubmit }) {
   const blank = { current: "", password: "", confirm: "" };
   const [f, setF] = useState(blank);
   const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
   const set = (k, v) => { setF({ ...f, [k]: v }); setMsg(null); };
-  const submit = e => {
+  const submit = async e => {
     e.preventDefault();
-    const err = onSubmit(f);
+    if (busy) return;
+    setBusy(true);
+    const err = await onSubmit(f);
+    setBusy(false);
     if (err) return setMsg({ kind: "error", text: err });
     setF(blank);
     setMsg({ kind: "ok", text: "เปลี่ยนรหัสผ่านเรียบร้อย" });
@@ -1808,7 +1772,7 @@ function ChangePassword({ username, onSubmit }) {
         <Field label="ยืนยันรหัสผ่านใหม่"><PasswordInput value={f.confirm} onChange={v => set("confirm", v)} autoComplete="new-password" /></Field>
       </div>
       {msg && <Note kind={msg.kind}>{msg.text}</Note>}
-      <div className="flex justify-end"><Btn type="submit" variant="primary"><Ic n="key" size={14} /> บันทึกรหัสใหม่</Btn></div>
+      <div className="flex justify-end"><Btn type="submit" variant="primary" disabled={busy}><Ic n="key" size={14} /> {busy ? "กำลังบันทึก…" : "บันทึกรหัสใหม่"}</Btn></div>
     </form>
   );
 }
@@ -1825,19 +1789,24 @@ function TeamSelect({ value, onChange, teams, users, selfId, label }) {
   );
 }
 
-function UserManager({ me, users, teams, onAdd, onUpdate, onReset, onDelete }) {
+// ownerId = เจ้าของลีก (ออนไลน์) → ลดสิทธิ์/ลบไม่ได้ · onReset = null → ตั้งรหัสแทนคนอื่นไม่ได้ (ออนไลน์)
+function UserManager({ me, users, teams, ownerId, onAdd, onUpdate, onReset, onDelete }) {
   const blank = { name: "", username: "", password: "", role: "manager", teamId: null };
   const [f, setF] = useState(blank);
   const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [resetId, setResetId] = useState(null);
   const [resetPw, setResetPw] = useState("");
   const admins = users.filter(u => u.role === "admin").length;
   const set = (k, v) => { setF({ ...f, [k]: v }); setMsg(null); };
   const teamName = id => { const t = teams.find(x => x.id === id); return t ? t.name : ""; };
 
-  const add = e => {
+  const add = async e => {
     e.preventDefault();
-    const err = onAdd(f);
+    if (busy) return;
+    setBusy(true);
+    const err = await onAdd(f);
+    setBusy(false);
     if (err) return setMsg({ kind: "error", text: err });
     setMsg({ kind: "ok", text: "เพิ่ม " + f.name.trim() + " แล้ว · บอกชื่อผู้ใช้กับรหัสผ่านให้เจ้าตัว" });
     setF(blank);
@@ -1855,16 +1824,16 @@ function UserManager({ me, users, teams, onAdd, onUpdate, onReset, onDelete }) {
       {msg && <div className="mb-3"><Note kind={msg.kind}>{msg.text}</Note></div>}
       <div className="divide-y divide-line/10 rounded-xl bg-sunken ring-1 ring-line/15">
         {users.map(u => {
-          const self = u.id === me.id, lastAdmin = u.role === "admin" && admins <= 1;
+          const self = u.id === me.id, lastAdmin = u.role === "admin" && admins <= 1, isOwner = u.id === ownerId;
           return (
             <div key={u.id} className="px-3 py-3">
               <div className="flex items-center gap-3">
                 <Avatar u={u} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-ink">{u.name}{self && <span className="font-normal text-muted"> (คุณ)</span>}</div>
+                  <div className="truncate text-sm font-medium text-ink">{u.name}{self && <span className="font-normal text-muted"> (คุณ)</span>}{isOwner && <span className="font-normal text-accent"> · เจ้าของลีก</span>}</div>
                   <div className="truncate text-xs text-muted">@{u.username}{u.role === "manager" && " · " + (teamName(u.teamId) || "ยังไม่มีทีม")}</div>
                 </div>
-                <select value={u.role} disabled={self || lastAdmin} onChange={e => onUpdate(u.id, { role: e.target.value })}
+                <select value={u.role} disabled={self || lastAdmin || isOwner} onChange={e => onUpdate(u.id, { role: e.target.value })}
                   aria-label={"สิทธิ์ของ " + u.name} className={INPUT_FIT + " py-1.5"}>
                   <option value="admin">แอดมิน</option>
                   <option value="referee">กรรมการ</option>
@@ -1877,14 +1846,17 @@ function UserManager({ me, users, teams, onAdd, onUpdate, onReset, onDelete }) {
                 </div>
               )}
               <div className="mt-2 flex justify-end gap-4 text-xs">
-                <button type="button" onClick={() => { setResetId(resetId === u.id ? null : u.id); setResetPw(""); setMsg(null); }}
-                  aria-label={"ตั้งรหัสใหม่ให้ " + u.name} className="font-medium text-accent hover:underline">ตั้งรหัสใหม่</button>
-                {!self && (
-                  <button type="button" disabled={lastAdmin} onClick={() => { if (confirm("ลบผู้ใช้ " + u.name + "?")) onDelete(u.id); }}
+                {onReset && (
+                  <button type="button" onClick={() => { setResetId(resetId === u.id ? null : u.id); setResetPw(""); setMsg(null); }}
+                    aria-label={"ตั้งรหัสใหม่ให้ " + u.name} className="font-medium text-accent hover:underline">ตั้งรหัสใหม่</button>
+                )}
+                {!self && !isOwner && (
+                  <button type="button" disabled={lastAdmin}
+                    onClick={() => { if (confirm("ลบผู้ใช้ " + u.name + "?" + (onReset ? "" : "\n\nชื่อผู้ใช้ @" + u.username + " จะใช้สร้างบัญชีใหม่อีกไม่ได้"))) onDelete(u.id); }}
                     aria-label={"ลบผู้ใช้ " + u.name} className="font-medium text-loss hover:underline disabled:opacity-40">ลบ</button>
                 )}
               </div>
-              {resetId === u.id && (
+              {onReset && resetId === u.id && (
                 <form onSubmit={e => reset(e, u)} noValidate className="mt-2 flex gap-2">
                   <input type="text" name="username" autoComplete="username" value={u.username} readOnly hidden />
                   <div className="flex-1"><PasswordInput value={resetPw} onChange={setResetPw} placeholder="รหัสใหม่ อย่างน้อย 6 ตัว" autoComplete="new-password" /></div>
@@ -1917,13 +1889,14 @@ function UserManager({ me, users, teams, onAdd, onUpdate, onReset, onDelete }) {
             </div>
           )}
         </div>
-        <div className="flex justify-end"><Btn type="submit" variant="primary"><Ic n="userPlus" size={14} /> เพิ่มผู้ใช้</Btn></div>
+        <div className="flex justify-end"><Btn type="submit" variant="primary" disabled={busy}><Ic n="userPlus" size={14} /> {busy ? "กำลังสร้างบัญชี…" : "เพิ่มผู้ใช้"}</Btn></div>
+        {!onReset && <p className="text-xs leading-relaxed text-muted">ลืมรหัสผ่าน: ลบบัญชีเดิมแล้วสร้างใหม่ด้วยชื่อผู้ใช้ใหม่ (ระบบออนไลน์ไม่ให้แอดมินตั้งรหัสแทนคนอื่น)</p>}
       </form>
     </div>
   );
 }
 
-function AccountModal({ user, users, teams, onClose, onLogout, onChangePassword, onAddUser, onUpdateUser, onResetPassword, onDeleteUser, onMyTeam }) {
+function AccountModal({ user, users, teams, ownerId, onClose, onLogout, onChangePassword, onAddUser, onUpdateUser, onResetPassword, onDeleteUser, onMyTeam }) {
   const isAdmin = user.role === "admin";
   const [tab, setTab] = useState("password");
   const myTeam = user.role === "manager" ? teams.find(t => t.id === user.teamId) : null;
@@ -1952,7 +1925,7 @@ function AccountModal({ user, users, teams, onClose, onLogout, onChangePassword,
         ? <Segmented value={tab} onChange={setTab} items={[["password", "เปลี่ยนรหัสผ่าน"], ["users", "จัดการผู้ใช้ (" + users.length + ")"]]} />
         : <SubHead>เปลี่ยนรหัสผ่าน</SubHead>}
       {tab === "users" && isAdmin
-        ? <UserManager me={user} users={users} teams={teams} onAdd={onAddUser} onUpdate={onUpdateUser} onReset={onResetPassword} onDelete={onDeleteUser} />
+        ? <UserManager me={user} users={users} teams={teams} ownerId={ownerId} onAdd={onAddUser} onUpdate={onUpdateUser} onReset={onResetPassword} onDelete={onDeleteUser} />
         : <ChangePassword username={user.username} onSubmit={onChangePassword} />}
     </Modal>
   );
@@ -2450,102 +2423,6 @@ function ShareModal({ blob, onClose }) {
   );
 }
 
-/* ══════════════════════════ DRIVE PANEL ══════════════════════════ */
-const SYNC_TEXT = { off: "ยังไม่ได้เชื่อม", auth: "ต้องเชื่อมต่อ Google อีกครั้ง", busy: "กำลังซิงก์…", ok: "ซิงก์แล้ว", error: "ซิงก์ไม่สำเร็จ" };
-
-function DrivePanel({ ready, drive, sync, isAdmin, onClose, onConnect, onCreate, onOpen, onSync, onShare, onDisconnect }) {
-  const [email, setEmail] = useState("");
-  const [shareMsg, setShareMsg] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const appUrl = location.origin + location.pathname.replace(/index\.html$/, "");
-  const share = async e => {
-    e.preventDefault();
-    const to = email.trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return setShareMsg({ kind: "error", text: "อีเมลไม่ถูกต้อง" });
-    setShareMsg(null);
-    try {
-      await onShare(to);
-      setShareMsg({ kind: "ok", text: "แชร์ให้ " + to + " แล้ว · Google ส่งอีเมลแจ้งให้ · อย่าลืมส่งลิงก์แอปให้เพื่อนด้วย" });
-      setEmail("");
-    } catch (err) { setShareMsg({ kind: "error", text: driveError(err) }); }
-  };
-  const copy = () => {
-    if (!navigator.clipboard) return;
-    navigator.clipboard.writeText(appUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }, () => {});
-  };
-  const box = "rounded-xl bg-sunken p-4 ring-1 ring-line/15";
-
-  return (
-    <Modal onClose={onClose} className="max-w-lg">
-      <ModalHead kicker="ข้อมูลร่วมกันทุกเครื่อง" title="Google Drive" onClose={onClose} />
-      {sync.s === "error" && sync.msg && <div className="mb-4"><Note>{sync.msg}</Note></div>}
-
-      {!ready ? (
-        <Note kind="warn">ยังไม่ได้ตั้งค่า Google Drive — แอดมินต้องใส่ Client ID, API key และ Project number ในไฟล์ config.js ก่อน (ดูขั้นตอนใน README หัวข้อ Google Drive)</Note>
-      ) : !drive ? (
-        <div className="space-y-4">
-          <p className="text-sm leading-relaxed text-soft">ตอนนี้ข้อมูลอยู่ในเครื่องนี้เครื่องเดียว เชื่อม Google Drive เพื่อให้ทุกคนเห็นตารางคะแนน นักเตะ และใช้บัญชีเดียวกันจากทุกเครื่อง</p>
-          <div className={box}>
-            <div className="font-display font-semibold italic text-ink">มีคนแชร์ไฟล์ลีกมาให้แล้ว</div>
-            <p className="mt-1 text-xs leading-relaxed text-muted">ล็อกอิน Google แล้วเลือกไฟล์ “{DRIVE_FILE_NAME}” · ข้อมูลในเครื่องนี้จะถูกแทนที่ด้วยข้อมูลในไฟล์</p>
-            <Btn variant="primary" className="mt-3" onClick={onOpen}><Ic n="cloud" size={14} /> เปิดไฟล์ลีกจาก Drive</Btn>
-          </div>
-          {isAdmin ? (
-            <div className={box}>
-              <div className="font-display font-semibold italic text-ink">เริ่มลีกบน Drive (แอดมิน)</div>
-              <p className="mt-1 text-xs leading-relaxed text-muted">สร้างไฟล์ใหม่ใน Drive ของคุณจากข้อมูลในเครื่องนี้ (ทีม นักเตะ ผลการแข่ง และบัญชีผู้ใช้) แล้วแชร์ให้เพื่อน</p>
-              <Btn className="mt-3" onClick={onCreate}><Ic n="plus" size={14} /> สร้างไฟล์ลีกใหม่</Btn>
-            </div>
-          ) : <p className="text-xs text-muted">ยังไม่มีไฟล์ลีก? ให้แอดมินล็อกอินในแอปแล้วกด “สร้างไฟล์ลีกใหม่” ก่อน</p>}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className={box}>
-            <div className="flex items-center gap-2">
-              <Ic n="cloud" size={16} className="shrink-0 text-link" />
-              <span className="min-w-0 flex-1 truncate font-medium text-ink">{drive.name || DRIVE_FILE_NAME}</span>
-              {drive.link && <a href={drive.link} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-link hover:underline">เปิดใน Drive ↗</a>}
-            </div>
-            <div className="mt-1 text-xs text-muted">
-              {drive.owner ? "เจ้าของ: " + drive.owner + " · " : ""}{SYNC_TEXT[sync.s]}
-              {sync.at ? " · " + new Date(sync.at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น." : ""}
-            </div>
-            <div className="mt-3">
-              {sync.s === "auth"
-                ? <Btn variant="primary" onClick={onConnect}><Ic n="login" size={14} /> เชื่อมต่อ Google</Btn>
-                : <Btn onClick={onSync} disabled={sync.s === "busy"}><Ic n="refresh" size={14} /> ซิงก์ตอนนี้</Btn>}
-            </div>
-            <p className="mt-3 text-[11px] leading-relaxed text-muted">ซิงก์อัตโนมัติทุกครั้งที่แก้ไข และเช็กของใหม่ทุก 20 วินาที · ถ้าสองเครื่องแก้คนละเรื่องพร้อมกัน จะรวมให้ทั้งคู่ · ถ้าแก้เรื่องเดียวกัน เครื่องที่ซิงก์ทีหลังชนะ</p>
-          </div>
-          {isAdmin && (
-            <form onSubmit={share} noValidate className={box}>
-              <div className="font-display font-semibold italic text-ink">แชร์ให้เพื่อน</div>
-              <p className="mt-1 text-xs leading-relaxed text-muted">ใส่ Gmail ของเพื่อน → เพื่อนได้สิทธิ์แก้ไขไฟล์ แล้วส่งลิงก์แอปให้เพื่อนเปิด › Google Drive › เปิดไฟล์ลีก</p>
-              <div className="mt-3 flex gap-2">
-                <input type="email" value={email} onChange={e => { setEmail(e.target.value); setShareMsg(null); }} placeholder="friend@gmail.com" aria-label="อีเมลเพื่อน" className={INPUT} />
-                <Btn type="submit" variant="primary" disabled={sync.s === "auth"} className="shrink-0"><Ic n="mail" size={14} /> แชร์</Btn>
-              </div>
-              {shareMsg && <div className="mt-2"><Note kind={shareMsg.kind}>{shareMsg.text}</Note></div>}
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-page/60 px-3 py-2 text-xs ring-1 ring-line/15">
-                <span className="min-w-0 flex-1 truncate text-soft">{appUrl}</span>
-                <button type="button" onClick={copy} className="flex shrink-0 items-center gap-1 text-link hover:text-accent">
-                  <Ic n="copy" size={12} /> {copied ? "คัดลอกแล้ว" : "คัดลอกลิงก์แอป"}
-                </button>
-              </div>
-            </form>
-          )}
-          <button type="button" onClick={onDisconnect} className="w-full text-center text-xs text-muted hover:text-loss">
-            ยกเลิกการเชื่อม Drive ในเครื่องนี้ (ข้อมูลในเครื่องยังอยู่)
-          </button>
-        </div>
-      )}
-      <p className="mt-5 border-t border-line/15 pt-3 text-[11px] leading-relaxed text-muted">
-        ทุกคนที่ได้รับแชร์ไฟล์ แก้ข้อมูลในไฟล์ได้โดยตรง (รวมรายชื่อบัญชี) — แชร์เฉพาะเพื่อนที่ไว้ใจ · รหัสผ่านในไฟล์ถูกเข้ารหัส ไม่เก็บตัวจริง
-      </p>
-    </Modal>
-  );
-}
-
 /* ══════════════════════════ PLAYER STATS TAB ══════════════════════════ */
 const PLAYER_SORTS = {
   G:    { label: "ดาวซัลโว",    fn: (a, b) => b.G - a.G || b.A - a.A || a.name.localeCompare(b.name), keep: s => s.G > 0 },
@@ -2621,10 +2498,11 @@ function PlayersTab({ stats, matches, teams, imageSetter }) {
 
 /* ══════════════════════════ MAIN APP ══════════════════════════ */
 function FriendsLeague() {
-  const [teams, setTeams]     = useState(() => load("fl_teams", SEED_TEAMS).map(withSquad));
-  const [matches, setMatches] = useState(() => load("fl_matches", SEED_MATCHES));
-  const [users, setUsers]     = useState(() => load("fl_users", []));
-  const [session, setSession] = useState(() => { const s = load("fl_session", null); return s && s.exp > Date.now() ? s : null; });
+  // CLOUD: ข้อมูลมาจาก Firestore (เริ่มว่าง รอโหลด) · ไม่งั้นเก็บในเบราว์เซอร์ (ครั้งแรก = ข้อมูลตัวอย่าง)
+  const [teams, setTeams]     = useState(() => CLOUD ? [] : load("fl_teams", SEED_TEAMS).map(withSquad));
+  const [matches, setMatches] = useState(() => CLOUD ? [] : load("fl_matches", SEED_MATCHES));
+  const [users, setUsers]     = useState(() => CLOUD ? [] : load("fl_users", []));
+  const [session, setSession] = useState(() => { if (CLOUD) return null; const s = load("fl_session", null); return s && s.exp > Date.now() ? s : null; });
   const [tab, setTab]         = useState("home");
   const [showLogin, setShowLogin]     = useState(false);
   const [showAccount, setShowAccount] = useState(false);
@@ -2637,56 +2515,199 @@ function FriendsLeague() {
   const [shareBlob, setShareBlob]   = useState(null);
   const [sharing, setSharing]       = useState(false);
 
-  /* ── รูปการ์ดนักเตะ (IndexedDB) ── */
+  /* ── รูปการ์ดนักเตะ: แคชใน IndexedDB · CLOUD เก็บตัวจริงที่ images/{id} บน Firestore ── */
   const [images, setImages] = useState({});
   const imagesRef = useRef(images);
   imagesRef.current = images;
-  // เปิดแอป: โหลดรูปทั้งหมด แล้วลบรูปที่ไม่มีนักเตะคนไหนใช้แล้ว (เช่น อัปโหลดแล้วไม่ได้กดบันทึก)
-  // imgBoot: ต้องรอให้โหลดเสร็จก่อนเขียนไฟล์ Drive ไม่งั้นไฟล์จะไม่มีรูปที่ยังโหลดไม่ทัน
+  // เปิดแอป: โหลดรูปที่เก็บไว้ในเครื่อง · โหมดเครื่องเดียว: ลบรูปที่ไม่มีนักเตะคนไหนใช้แล้ว (เช่น อัปโหลดแล้วไม่ได้กดบันทึก)
+  // (CLOUD ไม่ลบ เพราะตอนเปิดแอปยังไม่รู้ว่าทีมใช้รูปไหน — รูปในเครื่องเป็นแค่แคช)
   const imgBoot = useRef(null);
   useEffect(() => {
     imgBoot.current = ImgDB.all().then(m => {
-      const used = new Set();
-      teams.forEach(t => (t.players || []).forEach(p => { if (p.img) used.add(p.img); }));
-      const orphan = Object.keys(m).filter(id => !used.has(id));
-      if (orphan.length) ImgDB.del(orphan).catch(() => {});
-      orphan.forEach(id => { delete m[id]; });
+      if (!CLOUD) {
+        const used = new Set();
+        teams.forEach(t => (t.players || []).forEach(p => { if (p.img) used.add(p.img); }));
+        const orphan = Object.keys(m).filter(id => !used.has(id));
+        if (orphan.length) ImgDB.del(orphan).catch(() => {});
+        orphan.forEach(id => { delete m[id]; });
+      }
       imagesRef.current = { ...m, ...imagesRef.current };
       setImages(prev => ({ ...m, ...prev }));
     }).catch(() => {});
   }, []);
-  const putImage = async data => {
-    const id = imageId(data);
-    try { await ImgDB.put(id, data); } catch (e) {}   // ไม่มี IndexedDB → ใช้ได้จนกว่าจะรีโหลด
-    setImages(prev => prev[id] ? prev : { ...prev, [id]: data });
-    return id;
-  };
-  // รับรูปจากไฟล์ Drive / ไฟล์ import (รับเฉพาะ data:image ที่ถูกรูปแบบ ไม่เกิน 400KB ต่อใบ)
+  // รับเฉพาะ data:image ที่ถูกรูปแบบ ไม่เกิน 400KB ต่อใบ (มาจากไฟล์ import / Firestore)
+  const okImage = (id, data) => IMG_ID_RE.test(id) && typeof data === "string" && data.length < 400000 && IMG_DATA_RE.test(data);
   const absorbImages = map => {
     if (!map || typeof map !== "object") return;
     const add = {};
-    Object.entries(map).forEach(([id, data]) => {
-      if (/^c[0-9a-f]{24}$/.test(id) && typeof data === "string" && data.length < 400000 && IMG_DATA_RE.test(data) && !imagesRef.current[id]) add[id] = data;
-    });
+    Object.entries(map).forEach(([id, data]) => { if (okImage(id, data) && !imagesRef.current[id]) add[id] = data; });
     if (!Object.keys(add).length) return;
     Object.entries(add).forEach(([id, data]) => ImgDB.put(id, data).catch(() => {}));
     imagesRef.current = { ...imagesRef.current, ...add };
     setImages(prev => ({ ...prev, ...add }));
   };
-  // รูปที่นักเตะในข้อมูลชุดนี้ใช้อยู่ → แนบไปกับไฟล์ Drive / Export
+  // CLOUD: ส่งรูปขึ้น Firestore · มีรูปนี้อยู่แล้วก็ข้าม (id มาจาก hash ของรูป = รูปเดียวกัน · กฎไม่ให้เขียนทับ)
+  // เช็กก่อนส่ง → ถ้าส่งไม่ผ่านจริงจะแจ้งเตือน (ไม่เงียบหาย)
+  const uploadImages = map => {
+    if (!CLOUD || !Cloud.db || !map) return;
+    Object.entries(map).forEach(([id, data]) => {
+      if (!okImage(id, data)) return;
+      const ref = Cloud.db.collection("images").doc(id);
+      ref.get().catch(() => null).then(s => {
+        if (s && s.exists) return;
+        return ref.set({ data, at: Date.now() }).catch(failed);
+      });
+    });
+  };
+  const putImage = async data => {
+    const id = imageId(data);
+    try { await ImgDB.put(id, data); } catch (e) {}   // ไม่มี IndexedDB → ใช้ได้จนกว่าจะรีโหลด
+    imagesRef.current = { ...imagesRef.current, [id]: data };
+    setImages(prev => prev[id] ? prev : { ...prev, [id]: data });
+    uploadImages({ [id]: data });
+    return id;
+  };
+  // รูปที่นักเตะในข้อมูลชุดนี้ใช้อยู่ → แนบไปกับไฟล์ Export
   const usedImages = teamList => {
     const out = {};
     teamList.forEach(t => (t.players || []).forEach(p => { if (p.img && imagesRef.current[p.img]) out[p.img] = imagesRef.current[p.img]; }));
     return out;
   };
-
-  useEffect(() => save("fl_teams", teams), [teams]);
-  useEffect(() => save("fl_matches", matches), [matches]);
-  useEffect(() => save("fl_users", users), [users]);
+  // CLOUD: ทีมอ้างรูปที่เครื่องนี้ยังไม่มี → ดึงจาก Firestore ทีละรูป (ครั้งเดียว แล้วเก็บแคชไว้ในเครื่อง)
+  const askedImg = useRef(new Set());
   useEffect(() => {
+    if (!CLOUD || !Cloud.db || !imgBoot.current) return;
+    imgBoot.current.then(() => teams.forEach(t => (t.players || []).forEach(p => {
+      const id = p.img;
+      if (!id || imagesRef.current[id] || askedImg.current.has(id) || !IMG_ID_RE.test(id)) return;
+      askedImg.current.add(id);
+      Cloud.db.collection("images").doc(id).get()
+        .then(s => { if (s.exists) absorbImages({ [id]: (s.data() || {}).data }); })
+        .catch(() => askedImg.current.delete(id));
+    })));
+  }, [teams]);
+
+  useEffect(() => { if (!CLOUD) save("fl_teams", teams); }, [teams]);
+  useEffect(() => { if (!CLOUD) save("fl_matches", matches); }, [matches]);
+  useEffect(() => { if (!CLOUD) save("fl_users", users); }, [users]);
+  useEffect(() => {
+    if (CLOUD) return;
     if (session) save("fl_session", session);
     else try { localStorage.removeItem("fl_session"); } catch (e) {}
   }, [session]);
+
+  /* ── CLOUD: Firestore → state (อัปเดตสด) ──
+     server = ข้อมูลล่าสุดจากเซิร์ฟเวอร์ ไว้เทียบว่าเครื่องนี้แก้อะไร · null = ยังไม่ได้โหลด → ห้ามเขียน */
+  const [authUid, setAuthUid]   = useState(null);
+  const [owner, setOwner]       = useState(undefined);   // undefined = ยังไม่รู้ · null = ยังไม่มีแอดมิน · { uid }
+  const [cloudOk, setCloudOk]   = useState({ teams: !CLOUD, matches: !CLOUD });
+  const [cloudErr, setCloudErr] = useState("");
+  const [noRole, setNoRole]     = useState(false);       // ล็อกอินแล้ว แต่ไม่มีบัญชีในลีก (ถูกลบ / ยังไม่ได้เพิ่ม)
+  const [online, setOnline]     = useState(() => navigator.onLine !== false);
+  const server     = useRef({ teams: null, matches: null, users: null });
+  const ownerRef   = useRef(owner);
+  const settingUp  = useRef(false);
+  const afterLogin = useRef(false);
+  ownerRef.current = owner;
+  const failed = e => setCloudErr(cloudError(e));
+  // อ่านข้อมูลลีกไม่ได้เลย (เช่น ยังไม่ได้วางกฎ firestore.rules / เน็ตหลุดตอนโหลด) → ค้างข้อความไว้บนหน้า
+  const [bootErr, setBootErr] = useState("");
+  const bootFail = e => setBootErr(e && e.code === "permission-denied"
+    ? "อ่านข้อมูลลีกไม่ได้ — ตรวจว่าวางกฎจากไฟล์ firestore.rules ใน Firebase แล้ว (ดู README)" : cloudError(e));
+
+  useEffect(() => {
+    if (!CLOUD) return;
+    const on = () => setOnline(true), off = () => setOnline(false);
+    window.addEventListener("online", on); window.addEventListener("offline", off);
+    let alive = true;
+    const stops = [];
+    Cloud.init().then(() => {
+      if (!alive) return;
+      const db = Cloud.db, meta = { includeMetadataChanges: true };
+      stops.push(db.doc("meta/owner").onSnapshot(meta, s => {
+        if (!s.exists && s.metadata.fromCache) return;   // แคชยังไม่มี ≠ ไม่มีแอดมิน → รอคำตอบจากเซิร์ฟเวอร์
+        setOwner(s.exists ? s.data() : null);
+      }, bootFail));
+      const watch = (name, set) => db.collection(name).onSnapshot(meta, s => {
+        if (s.empty && s.metadata.fromCache) return;
+        let list = s.docs.map(d => d.data()).sort((a, b) => a.id - b.id);
+        if (name === "teams") list = list.map(withSquad);
+        server.current[name] = new Map(list.map(x => [String(x.id), x]));
+        set(list);
+        setCloudOk(r => r[name] ? r : { ...r, [name]: true });
+      }, bootFail);
+      stops.push(watch("teams", setTeams), watch("matches", setMatches));
+      stops.push(Cloud.auth.onAuthStateChanged(u => setAuthUid(u ? u.uid : null)));
+    }).catch(e => alive && bootFail(e));
+    return () => { alive = false; stops.forEach(f => f()); window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+
+  // บัญชีของฉัน (users/{uid}) → มีแล้วค่อยฟังรายชื่อบัญชีทั้งหมด (กฎให้อ่านได้เฉพาะคนที่มีบัญชีในลีก)
+  useEffect(() => {
+    if (!CLOUD) return;
+    let stopList = null;
+    const clear = () => { if (stopList) { stopList(); stopList = null; } server.current.users = null; setUsers([]); };
+    if (!authUid) { clear(); setNoRole(false); return; }
+    const db = Cloud.db;
+    const stopMe = db.doc("users/" + authUid).onSnapshot({ includeMetadataChanges: true }, s => {
+      if (!s.exists && s.metadata.fromCache) return;
+      if (!s.exists) {
+        clear();
+        if (settingUp.current) return;
+        // เจ้าของลีกที่ตั้งค่าค้างกลางทาง (เน็ตหลุดหลังสร้างบัญชี) → สร้างข้อมูลบัญชีแอดมินต่อให้
+        const me = Cloud.auth.currentUser, own = ownerRef.current;
+        if (me && own && own.uid === authUid) {
+          const name = (me.email || "").split("@")[0];
+          db.doc("users/" + authUid).set({ name, username: name, role: "admin", teamId: null, at: Date.now() }).catch(failed);
+        } else setNoRole(true);
+        return;
+      }
+      setNoRole(false);
+      if (stopList) return;
+      stopList = db.collection("users").onSnapshot(q => {
+        const list = q.docs.map(d => ({ ...d.data(), id: d.id })).sort((a, b) => (a.at || 0) - (b.at || 0));
+        server.current.users = new Map(list.map(u => [u.id, u]));
+        setUsers(list);
+      }, failed);
+    }, failed);
+    return () => { stopMe(); clear(); };
+  }, [authUid]);
+
+  /* ── CLOUD: state → Firestore ──
+     ส่งเฉพาะเอกสาร/ช่องที่เครื่องนี้แก้ (เทียบกับ server) · เขียนไม่ผ่านกฎ → Firestore ย้อนกลับเอง + แจ้งเตือน
+     ผู้ชมที่ไม่ได้ล็อกอินไม่เขียนอะไรเลย */
+  const uid  = CLOUD ? authUid : session && session.uid;
+  const user = (uid && users.find(u => u.id === uid)) || null;
+  const pushChanges = (name, list, keyOf, toDoc) => {
+    const prev = server.current[name];
+    if (!CLOUD || !prev || !user) return;
+    const col = Cloud.db.collection(name), seen = new Set();
+    list.forEach(item => {
+      const id = keyOf(item), data = plain(toDoc(item)), old = prev.get(id);
+      seen.add(id);
+      if (!old) { prev.set(id, item); col.doc(id).set(data).catch(failed); return; }
+      const before = plain(toDoc(old)), patch = {};
+      Object.keys(data).forEach(k => { if (stable(data[k]) !== stable(before[k])) patch[k] = data[k]; });
+      Object.keys(before).forEach(k => { if (!(k in data)) patch[k] = firebase.firestore.FieldValue.delete(); });
+      if (Object.keys(patch).length) { prev.set(id, item); col.doc(id).update(patch).catch(failed); }
+    });
+    [...prev.keys()].forEach(id => { if (!seen.has(id)) { prev.delete(id); col.doc(id).delete().catch(failed); } });
+  };
+  const withoutId = ({ id, ...rest }) => rest;
+  useEffect(() => { pushChanges("teams", teams, t => String(t.id), t => t); }, [teams]);
+  useEffect(() => { pushChanges("matches", matches, m => String(m.id), m => m); }, [matches]);
+  useEffect(() => { pushChanges("users", users, u => u.id, withoutId); }, [users]);
+  // แจ้งเตือนปัญหาแล้วซ่อนเองใน 8 วิ
+  useEffect(() => { if (!cloudErr) return; const t = setTimeout(() => setCloudErr(""), 8000); return () => clearTimeout(t); }, [cloudErr]);
+
+  // CLOUD: ข้อมูลที่เคยกรอกในเบราว์เซอร์นี้ (ตอนยังเป็นแบบเครื่องเดียว) → แอดมินกดย้ายขึ้นออนไลน์ได้
+  const localLeague = useMemo(() => {
+    if (!CLOUD) return null;
+    const t = load("fl_teams", null), m = load("fl_matches", null);
+    return Array.isArray(t) && t.length ? { teams: t.map(withSquad), matches: Array.isArray(m) ? m : [] } : null;
+  }, []);
+  // ย้ายแล้ว → ซ่อนปุ่มท้ายหน้าถาวร (กันเผลอเอาข้อมูลเก่าในเครื่องไปทับผลล่าสุดบนออนไลน์)
+  const [moved, setMoved] = useState(() => !!load("fl_cloud_moved", false));
 
   const standings = useMemo(() => computeStandings(teams, matches), [teams, matches]);
   const pstats    = useMemo(() => computePlayerStats(teams, matches), [teams, matches]);
@@ -2701,7 +2722,6 @@ function FriendsLeague() {
   const topScorer = pstats.filter(s => s.G > 0).sort(PLAYER_SORTS.G.fn)[0];
 
   // ผู้ใช้ที่ล็อกอินอยู่ (ถ้าบัญชีถูกลบ → หลุดเป็นผู้ชมเอง)
-  const user    = (session && users.find(u => u.id === session.uid)) || null;
   const canEdit = !!user && (user.role === "admin" || user.role === "referee");
   const isAdmin = !!user && user.role === "admin";
   const myTeam  = user && user.role === "manager" ? teams.find(t => t.id === user.teamId) : null;
@@ -2711,177 +2731,114 @@ function FriendsLeague() {
   const openProfile = t => setProfileId(t.id);
   const profileTeam = teams.find(t => t.id === profileId);
   const squadTeam   = teams.find(t => t.id === squadTeamId);
+  const ownerId     = CLOUD && owner ? owner.uid : null;
+  const loading     = CLOUD && !(cloudOk.teams && cloudOk.matches);
+  // โหลดนานเกิน 15 วิ (เน็ตหลุด / ยังไม่ได้สร้าง Firestore Database) → บอกวิธีแก้แทนการหมุนค้าง
+  const [slow, setSlow] = useState(false);
+  useEffect(() => { if (!loading) return; const t = setTimeout(() => setSlow(true), 15000); return () => clearTimeout(t); }, [loading]);
+  const needSetup   = CLOUD ? owner === null : users.length === 0;
 
   // แท็บ "ทีมของฉัน" หายเมื่อออกจากระบบ → กลับหน้าแรก
   useEffect(() => { if (tab === "myteam" && !(user && user.role === "manager")) setTab("home"); }, [user, tab]);
-
-  /* ── Google Drive sync ──
-     base = ข้อมูล + version ตอนซิงก์ครั้งล่าสุด (เก็บในเครื่อง ไว้รวมการแก้ไขแบบ 3 ทางหลังรีโหลด) */
-  const [drive, setDrive]   = useState(() => load("fl_drive", null));     // { fileId, name, owner, link }
-  const [sync, setSync]     = useState(() => ({ s: load("fl_drive", null) ? (Drive.valid() ? "ok" : "auth") : "off", at: 0, msg: "" }));
-  const [showDrive, setShowDrive] = useState(false);
-  const baseRef  = useRef(load("fl_drive_base", null));
-  const dataRef  = useRef(null);
-  const driveRef = useRef(drive);
-  const meRef    = useRef("");
-  const skipPush = useRef(false);
-  const queue    = useRef(Promise.resolve());
-  dataRef.current = { teams, matches, users };
-  driveRef.current = drive;
-  meRef.current = user ? user.name : "";
-
-  useEffect(() => {
-    if (drive) save("fl_drive", drive);
-    else try { localStorage.removeItem("fl_drive"); } catch (e) {}
-  }, [drive]);
-  const setBase = b => {
-    baseRef.current = b;
-    if (b) save("fl_drive_base", b);
-    else try { localStorage.removeItem("fl_drive_base"); } catch (e) {}
-  };
-  // ข้อมูลที่มาจาก Drive → ใส่ state โดยไม่ส่งกลับขึ้น Drive ซ้ำ
-  const applyData = d => { skipPush.current = true; dataRef.current = d; setTeams(d.teams); setMatches(d.matches); setUsers(d.users); };
-
-  // ซิงก์ทีละงาน (ต่อคิว) กันสองงานเขียนทับกัน
-  const syncNow = () => {
-    const job = async () => {
-      const d = driveRef.current;
-      if (!d) return;
-      if (!Drive.valid()) { setSync(s => ({ ...s, s: "auth" })); return; }
-      setSync(s => ({ ...s, s: "busy" }));
-      try {
-        const local = dataRef.current, base = baseRef.current;
-        const meta = await Drive.meta(d.fileId);
-        let next = local;
-        if (!base || String(meta.version) !== String(base.version)) {
-          const raw = await Drive.read(d.fileId);
-          if (!validDoc(raw)) throw Object.assign(new Error("bad"), { badFile: true });
-          absorbImages(raw.images);
-          const remote = docData(raw);
-          next = base ? mergeData(base.data, local, remote) : remote;
-          if (!sameJson(next, local)) applyData(next);
-          if (sameJson(next, remote)) { setBase({ version: String(meta.version), data: next }); setSync({ s: "ok", at: Date.now(), msg: "" }); return; }
-        } else if (sameJson(local, base.data)) { setSync({ s: "ok", at: Date.now(), msg: "" }); return; }
-        if (meta.capabilities && meta.capabilities.canEdit === false) throw Object.assign(new Error("ro"), { readonly: true });
-        await imgBoot.current;
-        const res = await Drive.write(d.fileId, makeDoc(next, meRef.current, usedImages(next.teams)));
-        setBase({ version: String(res.version), data: next });
-        setSync({ s: "ok", at: Date.now(), msg: "" });
-      } catch (e) {
-        setSync({ s: e.auth ? "auth" : "error", at: Date.now(), msg: driveError(e) });
-      }
-    };
-    queue.current = queue.current.then(job, job);
-    return queue.current;
-  };
-
-  // แก้อะไรในเครื่อง → รอ 1.2 วิแล้วซิงก์ (รวมหลายการแก้เป็นครั้งเดียว)
-  useEffect(() => {
-    if (skipPush.current) { skipPush.current = false; return; }
-    if (!driveRef.current) return;
-    if (!Drive.valid()) { setSync(s => s.s === "auth" ? s : { ...s, s: "auth" }); return; }
-    const t = setTimeout(syncNow, 1200);
-    return () => clearTimeout(t);
-  }, [teams, matches, users]);
-
-  // เช็กของใหม่จากเพื่อนทุก 20 วิ (เฉพาะตอนเปิดหน้านี้อยู่)
-  useEffect(() => {
-    if (!drive) return;
-    const t = setInterval(() => { if (document.visibilityState === "visible" && Drive.valid()) syncNow(); }, 20000);
-    return () => clearInterval(t);
-  }, [drive && drive.fileId]);
-
-  const driveInfo = (id, meta) => ({ fileId: id, name: meta.name || DRIVE_FILE_NAME, link: meta.webViewLink || "",
-    owner: (meta.owners && meta.owners[0] && meta.owners[0].displayName) || "" });
-  const withGoogle = async fn => {
-    try { if (!Drive.valid()) await Drive.signIn(); await fn(); }
-    catch (e) { setSync(s => ({ ...s, s: e.auth ? "auth" : "error", at: Date.now(), msg: driveError(e) })); }
-  };
-  const connectDrive = () => withGoogle(() => syncNow());
-  const createDrive = () => withGoogle(async () => {
-    await imgBoot.current;
-    const data = dataRef.current;
-    const f = await Drive.create(makeDoc(data, meRef.current, usedImages(data.teams)));
-    const meta = await Drive.meta(f.id);
-    setBase({ version: String(meta.version), data });
-    setDrive(driveInfo(f.id, meta));
-    setSync({ s: "ok", at: Date.now(), msg: "" });
-  });
-  const openDrive = () => withGoogle(async () => {
-    const id = await Drive.pick();
-    if (!id) return;
-    const [meta, raw] = await Promise.all([Drive.meta(id), Drive.read(id)]);
-    if (!validDoc(raw)) throw Object.assign(new Error("bad"), { badFile: true });
-    if (!confirm("ข้อมูลในเครื่องนี้ (ทีม นักเตะ ผลการแข่ง บัญชี) จะถูกแทนที่ด้วยข้อมูลจากไฟล์ใน Drive · ดำเนินการต่อ?")) return;
-    absorbImages(raw.images);
-    const data = docData(raw);
-    applyData(data);
-    setBase({ version: String(meta.version), data });
-    setDrive(driveInfo(id, meta));
-    setSync({ s: "ok", at: Date.now(), msg: "" });
-  });
-  const disconnectDrive = () => {
-    if (!confirm("หยุดซิงก์กับ Google Drive ในเครื่องนี้? ข้อมูลในเครื่องยังอยู่ แต่จะไม่อัปเดตกับเพื่อนอีก")) return;
-    setDrive(null); setBase(null); setSync({ s: "off", at: 0, msg: "" });
-  };
-  const shareDrive = email => Drive.share(drive.fileId, email);
-  const PILL = {
-    ok:    ["ซิงก์แล้ว",   "bg-win/10 text-win ring-win/30"],
-    busy:  ["กำลังซิงก์",  "bg-link/10 text-link ring-link/30"],
-    auth:  ["เชื่อม Drive", "bg-accent/15 text-accent ring-accent/40"],
-    error: ["ซิงก์ไม่ได้",  "bg-loss/10 text-loss ring-loss/30"],
-  }[sync.s] || ["Drive", "bg-line/10 text-soft ring-line/20"];
+  // CLOUD: ล็อกอินเสร็จ (โหลดบัญชีแล้ว) → ผู้จัดการทีมไปหน้า "ทีมของฉัน"
+  useEffect(() => { if (afterLogin.current && user) { afterLogin.current = false; if (user.role === "manager") setTab("myteam"); } }, [user]);
 
   /* ── auth ── */
   const login = u => { setSession(newSession(u)); setShowLogin(false); if (u.role === "manager") setTab("myteam"); };
+  const cloudLogin = async f => {
+    afterLogin.current = true;
+    try { await Cloud.auth.signInWithEmailAndPassword(Cloud.email(f.username), f.password); setShowLogin(false); return ""; }
+    catch (e) { afterLogin.current = false; return cloudError(e); }
+  };
   const setupAdmin = f => {
     const admin = makeUser({ ...f, role: "admin" }, []);
     setUsers([admin]);
     login(admin);
   };
-  const logout = () => { setSession(null); setShowAccount(false); };
-  const changePassword = f => {
+  // CLOUD: แอดมินคนแรก = เจ้าของลีก · ตั้งได้ครั้งเดียว (กฎบนเซิร์ฟเวอร์กันคนอื่นตั้งซ้ำ)
+  const cloudSetup = async f => {
+    settingUp.current = true;
+    try {
+      const cred = await Cloud.auth.createUserWithEmailAndPassword(Cloud.email(f.username), f.password);
+      const id = cred.user.uid, db = Cloud.db;
+      try { await db.doc("meta/owner").set({ uid: id, at: Date.now() }); }
+      catch (e) {
+        await cred.user.delete().catch(() => {});
+        return e && e.code === "permission-denied" ? "ลีกนี้มีแอดมินแล้ว — ให้แอดมินสร้างบัญชีให้แทน" : cloudError(e);
+      }
+      await db.doc("users/" + id).set({ name: f.name.trim(), username: normUser(f.username), role: "admin", teamId: null, at: Date.now() });
+      setShowLogin(false);
+      return "";
+    } catch (e) { return cloudError(e); }
+    finally { settingUp.current = false; }
+  };
+  const logout = () => {
+    if (CLOUD) Cloud.auth.signOut().catch(failed); else setSession(null);
+    setShowAccount(false);
+  };
+  const changePassword = async f => {
+    if (CLOUD) {
+      const err = validatePassword(f.password, f.confirm);
+      if (err) return err;
+      const me = Cloud.auth.currentUser;
+      if (!me) return "ยังไม่ได้ล็อกอิน";
+      try {
+        await me.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(me.email, f.current));
+        await me.updatePassword(f.password);
+        return "";
+      } catch (e) { return /credential|wrong-password/.test((e && e.code) || "") ? "รหัสผ่านปัจจุบันไม่ถูกต้อง" : cloudError(e); }
+    }
     if (!checkPassword(user, f.current)) return "รหัสผ่านปัจจุบันไม่ถูกต้อง";
     const err = validatePassword(f.password, f.confirm);
     if (err) return err;
-    setUsers(users.map(u => u.id === user.id ? withPassword(u, f.password) : u));
+    setUsers(us => us.map(u => u.id === user.id ? withPassword(u, f.password) : u));
     return "";
   };
-  const addUser = f => {
+  const addUser = async f => {
     const err = validateAccount(f, users);
     if (err) return err;
-    const nu = makeUser(f, users);
-    setUsers(nu.teamId ? assignTeam([...users, nu], nu.id, nu.teamId) : [...users, nu]);
-    return "";
+    const teamId = f.role === "manager" && f.teamId ? +f.teamId : null;
+    if (!CLOUD) {
+      const nu = makeUser(f, users);
+      setUsers(us => nu.teamId ? assignTeam([...us, nu], nu.id, nu.teamId) : [...us, nu]);
+      return "";
+    }
+    try {
+      const id = await Cloud.addAccount(f.username, f.password, newId => Cloud.db.doc("users/" + newId)
+        .set({ name: f.name.trim(), username: normUser(f.username), role: f.role, teamId, at: Date.now() }));
+      if (teamId) setUsers(us => us.map(u => u.id !== id && u.teamId === teamId ? { ...u, teamId: null } : u));   // ทีมหนึ่งมีผู้จัดการคนเดียว
+      return "";
+    } catch (e) { return cloudError(e); }
   };
   const adminCount = users.filter(u => u.role === "admin").length;
   const updateUser = (id, patch) => {
     const target = users.find(u => u.id === id);
-    if (!target || id === user.id) return;
+    if (!target || id === user.id || id === ownerId) return;
     if (patch.role && target.role === "admin" && patch.role !== "admin" && adminCount <= 1) return;   // ต้องเหลือแอดมินอย่างน้อย 1
-    if ("teamId" in patch) return setUsers(assignTeam(users, id, patch.teamId));
-    setUsers(users.map(u => u.id === id ? { ...u, ...patch, teamId: (patch.role || u.role) === "manager" ? u.teamId : null } : u));
+    if ("teamId" in patch) return setUsers(us => assignTeam(us, id, patch.teamId));
+    setUsers(us => us.map(u => u.id === id ? { ...u, ...patch, teamId: (patch.role || u.role) === "manager" ? u.teamId : null } : u));
   };
   const resetPassword = (id, pw) => {
     const err = validatePassword(pw, pw);
     if (err) return err;
-    setUsers(users.map(u => u.id === id ? withPassword(u, pw) : u));
+    setUsers(us => us.map(u => u.id === id ? withPassword(u, pw) : u));
     return "";
   };
   const deleteUser = id => {
     const target = users.find(u => u.id === id);
-    if (!target || id === user.id || (target.role === "admin" && adminCount <= 1)) return;
-    setUsers(users.filter(u => u.id !== id));
+    if (!target || id === user.id || id === ownerId || (target.role === "admin" && adminCount <= 1)) return;
+    setUsers(us => us.filter(u => u.id !== id));
   };
 
-  /* ── league data ── */
+  /* ── league data ──
+     แก้ state แบบ functional เสมอ (ใช้ข้อมูลล่าสุด) → CLOUD ไม่เผลอส่งข้อมูลเก่าทับสิ่งที่เครื่องอื่นเพิ่งแก้ */
   const saveResult = (id, hs, as, events, perf, motm, formations) => {
-    setMatches(matches.map(m => m.id === id ? { ...m, hs, as, events, perf, motm, formations, status:"done" } : m));
+    setMatches(ms => ms.map(m => m.id === id ? { ...m, hs, as, events, perf, motm, formations, status:"done" } : m));
     setEditMatch(null);
   };
 
   const saveSchedule = (id, date, time) => {
-    setMatches(matches.map(m => m.id === id ? { ...m, date, time } : m));
+    setMatches(ms => ms.map(m => m.id === id ? { ...m, date, time } : m));
     setScheduleMatch(null);
   };
 
@@ -2891,38 +2848,37 @@ function FriendsLeague() {
     setTab("matches");
   };
 
-  // แอดมิน: สร้าง/แก้ทีม + ผูกบัญชีผู้จัดการทีม
+  // แอดมิน: สร้าง/แก้ทีม (ชื่อ เจ้าของ สโมสร สี) + ผูกบัญชีผู้จัดการทีม
   const saveTeam = (f, managerId) => {
     const id = f.id || uniqueId();
-    const team = withSquad({ ...f, id });
-    setTeams(f.id ? teams.map(t => t.id === id ? team : t) : [...teams, team]);
-    const current = users.find(u => u.role === "manager" && u.teamId === id);
-    if (managerId) setUsers(assignTeam(users, managerId, id));
-    else if (current) setUsers(users.map(u => u.id === current.id ? { ...u, teamId: null } : u));
+    const info = { name: f.name, owner: f.owner, club: f.club, kit: f.kit };
+    setTeams(ts => f.id ? ts.map(t => t.id === id ? withSquad({ ...t, ...info }) : t) : [...ts, withSquad({ ...info, id })]);
+    setUsers(us => managerId ? assignTeam(us, managerId, id)
+      : us.map(u => u.role === "manager" && u.teamId === id ? { ...u, teamId: null } : u));
     setTeamModal(null);
   };
 
   const deleteTeam = id => {
     const t = teams.find(x => x.id === id);
     if (!confirm("ลบทีม " + (t ? t.name : "") + " พร้อมนัดแข่งของทีมนี้ทั้งหมด?")) return;
-    setTeams(teams.filter(x => x.id !== id));
-    setMatches(matches.filter(m => m.home !== id && m.away !== id));
-    setUsers(users.map(u => u.teamId === id ? { ...u, teamId: null } : u));
+    setTeams(ts => ts.filter(x => x.id !== id));
+    setMatches(ms => ms.filter(m => m.home !== id && m.away !== id));
+    setUsers(us => us.map(u => u.teamId === id ? { ...u, teamId: null } : u));
     setTeamModal(null);
   };
 
   // ผู้จัดการทีมแก้ได้แค่ชื่อ/สีของทีมตัวเอง · แอดมินแก้ได้ทุกทีม
   const saveIdentity = (id, patch) => {
     if (!(isAdmin || (myTeam && myTeam.id === id))) return;
-    setTeams(teams.map(t => t.id === id ? { ...t, name: patch.name, kit: patch.kit } : t));
+    setTeams(ts => ts.map(t => t.id === id ? { ...t, name: patch.name, kit: patch.kit } : t));
   };
   // รายชื่อ + แผนการเล่น + ตำแหน่งตัวจริงในแผน (ผู้จัดการทีมของทีมนี้ หรือแอดมิน)
   const saveSquad = (id, players, formation, lineup) => {
     const t = teams.find(x => x.id === id);
     if (!t || !canEditSquad(t)) return;
-    setTeams(teams.map(x => x.id === id ? withSquad({ ...x, players, formation, lineup }) : x));
+    setTeams(ts => ts.map(x => x.id === id ? withSquad({ ...x, players, formation, lineup }) : x));
   };
-  // รูปการ์ดจากหน้าดูการ์ด (แตะนักเตะบนสนามในโปรไฟล์) → บันทึกทันที · แบบ functional เพราะอัปโหลดเป็น async
+  // รูปการ์ดจากหน้าดูการ์ด (แตะนักเตะบนสนามในโปรไฟล์) → บันทึกทันที
   const setPlayerImage = (teamId, playerId, img) => {
     const t = teams.find(x => x.id === teamId);
     if (!t || !canEditSquad(t)) return;
@@ -2932,12 +2888,28 @@ function FriendsLeague() {
   // ล้างแค่ข้อมูลลีก (ทีม/นัด) — บัญชีผู้ใช้ยังอยู่
   const resetAll = () => {
     if (!confirm("ล้างทีม นักเตะ และผลการแข่งทั้งหมด แล้วกลับไปใช้ข้อมูลตัวอย่าง? (บัญชีผู้ใช้ไม่ถูกลบ)" +
-      (drive ? "\n\n⚠️ เชื่อม Google Drive อยู่ — ข้อมูลของทุกคนในไฟล์ลีกจะถูกรีเซ็ตด้วย" : ""))) return;
-    localStorage.removeItem("fl_teams");
-    localStorage.removeItem("fl_matches");
+      (CLOUD ? "\n\n⚠️ เป็นข้อมูลออนไลน์ — ทุกคนจะเห็นข้อมูลที่รีเซ็ตแล้ว" : ""))) return;
+    if (!CLOUD) { localStorage.removeItem("fl_teams"); localStorage.removeItem("fl_matches"); }
     setTeams(SEED_TEAMS);
     setMatches(SEED_MATCHES);
   };
+
+  // CLOUD: ย้ายข้อมูลที่กรอกไว้ในเบราว์เซอร์นี้ (ทีม นักเตะ นัด รูปการ์ด) ขึ้นออนไลน์ — แทนที่ข้อมูลออนไลน์เดิม
+  const moveLocalUp = async () => {
+    if (!localLeague || !isAdmin) return;
+    if (teams.length && !confirm("แทนที่ข้อมูลออนไลน์ทั้งหมด (" + teams.length + " ทีม · " + matches.length + " นัด) ด้วยข้อมูลจากเครื่องนี้ ("
+      + localLeague.teams.length + " ทีม · " + localLeague.matches.length + " นัด)?")) return;
+    const all = await ImgDB.all().catch(() => ({}));
+    const used = {};
+    localLeague.teams.forEach(t => t.players.forEach(p => { if (p.img && all[p.img]) used[p.img] = all[p.img]; }));
+    absorbImages(used);
+    uploadImages(used);
+    setTeams(localLeague.teams);
+    setMatches(localLeague.matches);
+    save("fl_cloud_moved", Date.now());
+    setMoved(true);
+  };
+  const useSample = () => { setTeams(SEED_TEAMS); setMatches(SEED_MATCHES); };
 
   const shareImage = async () => {
     setSharing(true);
@@ -2970,6 +2942,7 @@ function FriendsLeague() {
         if (Array.isArray(d.teams))   setTeams(d.teams.map(withSquad));
         if (Array.isArray(d.matches)) setMatches(d.matches);
         absorbImages(d.images);
+        uploadImages(d.images);
       } catch (e) { alert("ไฟล์ไม่ถูกต้อง"); }
     };
     reader.readAsText(file);
@@ -3018,14 +2991,13 @@ function FriendsLeague() {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-          {drive && (
-            <button onClick={() => sync.s === "auth" ? connectDrive() : setShowDrive(true)}
-              aria-label={"Google Drive: " + SYNC_TEXT[sync.s]} title={"Google Drive: " + SYNC_TEXT[sync.s]}
-              className={"flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold ring-1 transition hover:brightness-125 " + PILL[1]}>
+          {CLOUD && (
+            <span role="status" aria-label={online ? "สถานะ: ออนไลน์" : "สถานะ: ออฟไลน์"}
+              title={online ? "ข้อมูลออนไลน์ · ทุกเครื่องเห็นข้อมูลเดียวกัน" : "ออฟไลน์ · สิ่งที่แก้จะส่งขึ้นเมื่อกลับมาออนไลน์"}
+              className={"flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold ring-1 " + (online ? "bg-win/10 text-win ring-win/30" : "bg-accent/15 text-accent ring-accent/40")}>
               <Ic n="cloud" size={15} />
-              <span className="hidden sm:inline">{PILL[0]}</span>
-              {sync.s === "busy" && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />}
-            </button>
+              <span className="hidden sm:inline">{online ? "ออนไลน์" : "ออฟไลน์"}</span>
+            </span>
           )}
           {user ? (
             <button onClick={() => setShowAccount(true)} aria-label="บัญชีของฉัน"
@@ -3036,9 +3008,13 @@ function FriendsLeague() {
                 <span className="block max-w-[140px] truncate text-[11px] leading-tight text-muted">{ROLE_LABEL[user.role]}{myTeam ? " · " + myTeam.name : ""}</span>
               </span>
             </button>
+          ) : CLOUD && authUid ? (
+            noRole
+              ? <Btn onClick={logout} className="shrink-0"><Ic n="logout" size={14} /> ออกจากระบบ</Btn>
+              : <span className="shrink-0 px-2 text-xs text-muted">กำลังโหลดบัญชี…</span>
           ) : (
             <Btn variant="primary" onClick={() => setShowLogin(true)} className="shrink-0">
-              <Ic n="login" size={14} /> {users.length ? "เข้าสู่ระบบ" : "ตั้งค่าแอดมิน"}
+              <Ic n="login" size={14} /> {needSetup ? "ตั้งค่าแอดมิน" : "เข้าสู่ระบบ"}
             </Btn>
           )}
           </div>
@@ -3058,21 +3034,74 @@ function FriendsLeague() {
       </header>
 
       <main className="relative mx-auto max-w-6xl px-5 py-8">
+        {noRole && (
+          <div className="mb-6"><Note kind="warn">บัญชีนี้ไม่มีสิทธิ์ในลีก (แอดมินอาจลบบัญชีนี้ หรือยังไม่ได้เพิ่มให้) — กด “ออกจากระบบ” แล้วติดต่อแอดมิน</Note></div>
+        )}
+        {loading ? (
+          <Card className="mx-auto max-w-md px-6 py-14 text-center">
+            {bootErr ? (
+              <>
+                <div className="font-display text-lg font-bold italic text-ink">โหลดข้อมูลลีกไม่ได้</div>
+                <p className="mt-2 text-sm leading-relaxed text-muted">{bootErr}</p>
+                <Btn variant="primary" className="mt-5" onClick={() => location.reload()}><Ic n="refresh" size={14} /> ลองใหม่</Btn>
+              </>
+            ) : (
+              <>
+                <span className="mx-auto block h-8 w-8 animate-spin rounded-full border-2 border-line/25 border-t-accent" />
+                <div className="mt-4 text-sm text-soft">กำลังโหลดข้อมูลลีก…</div>
+                {slow && (
+                  <>
+                    <p className="mt-3 text-xs leading-relaxed text-muted">ใช้เวลานานกว่าปกติ — ตรวจอินเทอร์เน็ต แล้วลองใหม่ · ถ้าเป็นเจ้าของลีก ตรวจว่าสร้าง Firestore Database และวางกฎ firestore.rules ใน Firebase แล้ว (ดู README)</p>
+                    <Btn className="mt-4" onClick={() => location.reload()}><Ic n="refresh" size={14} /> ลองใหม่</Btn>
+                  </>
+                )}
+              </>
+            )}
+          </Card>
+        ) : (<>
 
         {/* ═══ HOME ═══ */}
         {tab === "home" && (
           <div className="fl-enter">
             <SectionTitle icon="sparkles" kicker="Season 1 · Overview" title="ภาพรวมลีก" />
 
+            {CLOUD && teams.length === 0 && (
+              <Card className="mb-8 p-6 text-center">
+                <div className="font-display text-lg font-bold italic text-ink">ลีกออนไลน์ยังไม่มีข้อมูล</div>
+                {isAdmin ? (
+                  <>
+                    <p className="mt-2 text-sm leading-relaxed text-muted">เริ่มจากข้อมูลที่เคยกรอกไว้ในเครื่องนี้ ใช้ข้อมูลตัวอย่าง หรือสร้างทีมเองที่แท็บ “ทีมทั้งหมด”</p>
+                    <div className="mt-4 flex flex-wrap justify-center gap-2">
+                      {localLeague && (
+                        <Btn variant="primary" onClick={moveLocalUp}>
+                          <Ic n="upload" size={14} /> ย้ายข้อมูลจากเครื่องนี้ขึ้นออนไลน์ ({localLeague.teams.length} ทีม · {localLeague.matches.length} นัด)
+                        </Btn>
+                      )}
+                      <Btn onClick={useSample}><Ic n="sparkles" size={14} /> ใช้ข้อมูลตัวอย่าง</Btn>
+                    </div>
+                    <p className="mt-3 text-xs text-muted">บัญชีผู้จัดการทีม/กรรมการ ต้องสร้างใหม่ในเมนูบัญชี › จัดการผู้ใช้</p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-muted">
+                    {needSetup ? "ยังไม่ได้ตั้งค่าแอดมิน — เจ้าของลีกกด “ตั้งค่าแอดมิน” มุมขวาบนเพื่อเริ่ม" : "รอแอดมินเพิ่มทีมและโปรแกรมการแข่ง"}
+                  </p>
+                )}
+              </Card>
+            )}
+
             {nextMatch && (
               <NextMatch m={nextMatch} teams={teams} standings={standings} canEdit={canEdit}
                 onResult={setEditMatch} onOpen={openProfile} />
             )}
 
-            <SubHead link="ตารางเต็ม" onLink={() => setTab("standings")}>4 อันดับแรก</SubHead>
-            <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-              {standings.slice(0, 4).map(r => teamCard(r.team))}
-            </div>
+            {standings.length > 0 && (
+              <>
+                <SubHead link="ตารางเต็ม" onLink={() => setTab("standings")}>4 อันดับแรก</SubHead>
+                <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                  {standings.slice(0, 4).map(r => teamCard(r.team))}
+                </div>
+              </>
+            )}
 
             <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {STATS.map(s => (
@@ -3217,13 +3246,17 @@ function FriendsLeague() {
             </div>
           </div>
         )}
+        </>)}
       </main>
 
       {/* ═══ FOOTER ═══ */}
       <footer className="relative border-t border-line/10 py-7 text-center text-xs text-muted">
         <div>Friends League · eFootball 2027 Mobile · บันทึกผลด้วยมือ (ไม่เชื่อมต่อ Konami API)</div>
+        <div className="mt-1">{CLOUD ? "ข้อมูลออนไลน์ · ทุกเครื่องเห็นข้อมูลเดียวกัน" : "โหมดเครื่องเดียว · ข้อมูลอยู่ในเบราว์เซอร์นี้เท่านั้น (ตั้งค่า Firebase เพื่อใช้ร่วมกันทุกเครื่อง)"}</div>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          <Btn onClick={() => setShowDrive(true)}><Ic n="cloud" size={13} /> Google Drive</Btn>
+          {CLOUD && isAdmin && localLeague && !moved && teams.length > 0 && (
+            <Btn onClick={moveLocalUp}><Ic n="upload" size={13} /> ย้ายข้อมูลจากเครื่องนี้ขึ้นออนไลน์</Btn>
+          )}
           <Btn onClick={exportData}><Ic n="download" size={13} /> Export JSON</Btn>
           {isAdmin && (
             <label className="ef-btn ef-btn-ghost inline-flex cursor-pointer items-center gap-2 px-5 py-2 text-sm">
@@ -3239,11 +3272,14 @@ function FriendsLeague() {
         )}
       </footer>
 
-      {showLogin && <LoginModal users={users} onClose={() => setShowLogin(false)} onLogin={login} onSetup={setupAdmin} />}
+      {showLogin && (
+        <LoginModal users={users} setup={needSetup} cloud={CLOUD} onClose={() => setShowLogin(false)}
+          onLogin={CLOUD ? cloudLogin : login} onSetup={CLOUD ? cloudSetup : setupAdmin} />
+      )}
       {showAccount && user && (
         <AccountModal user={user} users={users} teams={teams} onClose={() => setShowAccount(false)} onLogout={logout}
-          onChangePassword={changePassword} onAddUser={addUser} onUpdateUser={updateUser}
-          onResetPassword={resetPassword} onDeleteUser={deleteUser}
+          onChangePassword={changePassword} onAddUser={addUser} onUpdateUser={updateUser} ownerId={ownerId}
+          onResetPassword={CLOUD ? null : resetPassword} onDeleteUser={deleteUser}
           onMyTeam={() => { setShowAccount(false); setTab("myteam"); }} />
       )}
       {editMatch && <ResultModal match={editMatch} teams={teams} onClose={() => setEditMatch(null)} onSave={saveResult} />}
@@ -3267,10 +3303,11 @@ function FriendsLeague() {
           onClose={() => setFixtureOpen(false)} onCreate={createFixtures} />
       )}
       {shareBlob && <ShareModal blob={shareBlob} onClose={() => setShareBlob(null)} />}
-      {showDrive && (
-        <DrivePanel ready={driveReady()} drive={drive} sync={sync} isAdmin={isAdmin} onClose={() => setShowDrive(false)}
-          onConnect={connectDrive} onCreate={createDrive} onOpen={openDrive} onSync={() => syncNow()}
-          onShare={shareDrive} onDisconnect={disconnectDrive} />
+      {cloudErr && (
+        <div role="alert" className="fixed inset-x-4 bottom-4 z-[60] mx-auto flex max-w-md items-start gap-2 rounded-xl bg-surface px-4 py-3 text-sm text-loss shadow-2xl ring-1 ring-loss/40">
+          <span className="min-w-0 flex-1">{cloudErr}</span>
+          <button onClick={() => setCloudErr("")} aria-label="ปิดข้อความ" className="shrink-0 text-muted hover:text-ink"><Ic n="x" size={14} /></button>
+        </div>
       )}
     </div>
     </ImgContext.Provider>
