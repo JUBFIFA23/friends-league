@@ -1,34 +1,24 @@
 <!DOCTYPE html>
-<html lang="th" data-theme="light">
+<html lang="th">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="theme-color" content="#EEF2F8" />
+<meta name="theme-color" content="#060E2A" />
 <title>Friends League · eFootball 2027 Mobile</title>
-
-<!-- ═══ THEME: ตั้งธีมก่อนหน้าเว็บวาด กันจอกะพริบ (ค่าเริ่มต้น = สว่าง) ═══ -->
-<script>
-  (function () {
-    var t = "light";
-    try { t = JSON.parse(localStorage.getItem("fl_theme")) === "dark" ? "dark" : "light"; } catch (e) {}
-    document.documentElement.setAttribute("data-theme", t);
-  })();
-</script>
 
 <!-- ═══ PRELOAD: ให้ app.js เริ่มโหลดพร้อม Babel ไม่ต้องรอต่อคิว ═══ -->
 <link rel="preload" href="app.js" as="fetch" crossorigin="anonymous">
 
-<!-- ═══ FONTS: Kanit = หัวข้อ/ตัวเลข · Noto Sans Thai = เนื้อหา ═══ -->
+<!-- ═══ FONTS: Kanit (มีตัวเอียง) = หัวข้อ/ตัวเลขสไตล์เกม · Noto Sans Thai = เนื้อหา ═══ -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:ital,wght@0,500;0,600;0,700;1,600;1,700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
 
 <!-- ═══ STYLES ═══ -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
-  // สีทั้งหมดอ้างตัวแปรใน style.css → สลับธีมแค่เปลี่ยน data-theme ที่ <html>
+  // ธีมสไตล์ eFootball 2022 (น้ำเงิน + เหลือง) — ค่าสีจริงอยู่ใน style.css
   tailwind.config = {
-    darkMode: ["selector", '[data-theme="dark"]'],
     theme: {
       extend: {
         colors: {
@@ -42,6 +32,7 @@
           line:        "rgb(var(--line) / <alpha-value>)",
           accent:      "rgb(var(--accent) / <alpha-value>)",
           "on-accent": "rgb(var(--on-accent) / <alpha-value>)",
+          link:        "rgb(var(--link) / <alpha-value>)",
           win:         "rgb(var(--win) / <alpha-value>)",
           loss:        "rgb(var(--loss) / <alpha-value>)",
         },
@@ -58,6 +49,8 @@
 <!-- ═══ REACT (global window.React / window.ReactDOM — ไม่ใช้ import) ═══ -->
 <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" crossorigin></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<!-- ค่าตั้งค่า Google Drive (ไม่ใช่รหัสลับ) -->
+<script src="config.js"></script>
 <!-- Babel ต้องล็อกไว้ที่ 7.x ห้ามลบเลขเวอร์ชัน / ห้ามอัปเป็น 8
      Babel 8 แอบใส่ import "react/jsx-runtime" → ค้างหน้า "กำลังโหลด…" (ทดสอบแล้ว ใส่ @jsxRuntime classic ก็ไม่ช่วย) -->
 <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
