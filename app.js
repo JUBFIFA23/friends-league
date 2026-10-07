@@ -70,13 +70,90 @@ const POS_SIDE = { LB: 0, LMF: 0, LWF: 0, RB: 2, RMF: 2, RWF: 2 };   // ที�
 const DEFAULT_POS = ["GK", "LB", "CB", "CB", "RB", "DMF", "CMF", "CMF", "LWF", "CF", "RWF",
                      "GK", "CB", "CB", "LB", "RB", "DMF", "CMF", "AMF", "LWF", "RWF", "CF", "SS"];
 
+/* ══════════════════════════ FORMATIONS (แผนการเล่น) ══════════════════════════
+   แต่ละแผนมี 11 ช่อง: ตำแหน่ง + พิกัดบนสนาม (x: 0 ซ้าย → 100 ขวา · y: 0 ฝั่งบุก → 100 ประตูตัวเอง)
+   team.formation = ชื่อแผน · team.lineup = id ตัวจริง 11 คนเรียงตามช่องของแผน */
+const slot = (pos, x, y) => ({ pos, x, y });
+const GK_SLOT = slot("GK", 50, 92);
+const BACK3 = [slot("CB", 25, 74), slot("CB", 50, 76), slot("CB", 75, 74)];
+const BACK4 = [slot("LB", 11, 69), slot("CB", 36, 75), slot("CB", 64, 75), slot("RB", 89, 69)];
+const BACK5 = [slot("LB", 8, 63), slot("CB", 29, 74), slot("CB", 50, 76), slot("CB", 71, 74), slot("RB", 92, 63)];
+const FORMATIONS = {
+  "4-4-2":   [GK_SLOT, ...BACK4, slot("LMF", 12, 46), slot("CMF", 37, 50), slot("CMF", 63, 50), slot("RMF", 88, 46), slot("CF", 37, 15), slot("CF", 63, 15)],
+  "4-3-3":   [GK_SLOT, ...BACK4, slot("CMF", 22, 50), slot("CMF", 50, 54), slot("CMF", 78, 50), slot("LWF", 16, 20), slot("CF", 50, 14), slot("RWF", 84, 20)],
+  "4-3-2-1": [GK_SLOT, ...BACK4, slot("CMF", 22, 54), slot("CMF", 50, 57), slot("CMF", 78, 54), slot("AMF", 32, 33), slot("AMF", 68, 33), slot("CF", 50, 13)],
+  "4-3-1-2": [GK_SLOT, ...BACK4, slot("CMF", 22, 54), slot("DMF", 50, 60), slot("CMF", 78, 54), slot("AMF", 50, 36), slot("CF", 35, 14), slot("CF", 65, 14)],
+  "4-2-3-1": [GK_SLOT, ...BACK4, slot("DMF", 36, 60), slot("DMF", 64, 60), slot("LMF", 14, 38), slot("AMF", 50, 36), slot("RMF", 86, 38), slot("CF", 50, 13)],
+  "4-2-1-3": [GK_SLOT, ...BACK4, slot("CMF", 36, 56), slot("CMF", 64, 56), slot("AMF", 50, 38), slot("LWF", 16, 19), slot("CF", 50, 13), slot("RWF", 84, 19)],
+  "4-1-4-1": [GK_SLOT, ...BACK4, slot("DMF", 50, 61), slot("LMF", 12, 42), slot("CMF", 36, 45), slot("CMF", 64, 45), slot("RMF", 88, 42), slot("CF", 50, 13)],
+  "4-1-2-3": [GK_SLOT, ...BACK4, slot("DMF", 50, 61), slot("CMF", 32, 46), slot("CMF", 68, 46), slot("LWF", 16, 20), slot("CF", 50, 14), slot("RWF", 84, 20)],
+  "3-4-3":   [GK_SLOT, ...BACK3, slot("LMF", 12, 48), slot("CMF", 37, 52), slot("CMF", 63, 52), slot("RMF", 88, 48), slot("LWF", 18, 20), slot("CF", 50, 14), slot("RWF", 82, 20)],
+  "3-2-4-1": [GK_SLOT, ...BACK3, slot("DMF", 36, 60), slot("DMF", 64, 60), slot("LMF", 10, 38), slot("AMF", 36, 34), slot("AMF", 64, 34), slot("RMF", 90, 38), slot("CF", 50, 13)],
+  "3-2-3-2": [GK_SLOT, ...BACK3, slot("DMF", 36, 60), slot("DMF", 64, 60), slot("LMF", 12, 40), slot("AMF", 50, 36), slot("RMF", 88, 40), slot("CF", 35, 14), slot("CF", 65, 14)],
+  "3-1-4-2": [GK_SLOT, ...BACK3, slot("DMF", 50, 61), slot("LMF", 10, 46), slot("CMF", 36, 48), slot("CMF", 64, 48), slot("RMF", 90, 46), slot("CF", 35, 14), slot("CF", 65, 14)],
+  "5-3-2":   [GK_SLOT, ...BACK5, slot("CMF", 25, 50), slot("DMF", 50, 55), slot("CMF", 75, 50), slot("CF", 35, 15), slot("CF", 65, 15)],
+  "5-2-2-1": [GK_SLOT, ...BACK5, slot("CMF", 36, 54), slot("CMF", 64, 54), slot("SS", 30, 31), slot("SS", 70, 31), slot("CF", 50, 13)],
+  "5-2-1-2": [GK_SLOT, ...BACK5, slot("CMF", 36, 54), slot("CMF", 64, 54), slot("AMF", 50, 36), slot("CF", 35, 14), slot("CF", 65, 14)],
+};
+const FORMATION_KEYS = Object.keys(FORMATIONS);
+
+// นักเตะตำแหน่ง a ยืนช่องตำแหน่ง b เหมาะแค่ไหน: 10 ตรงตำแหน่ง · 7/5 สายเดียวกัน · 3/2 สายติดกัน · 1 คนละสาย · 0 สลับกับ GK
+const LINE_ORDER = { DF: 0, MF: 1, FW: 2 };
+function posFit(a, b) {
+  if (a === b) return 10;
+  const ga = posGroup(a), gb = posGroup(b);
+  if (ga === "GK" || gb === "GK") return 0;
+  const sameSide = (POS_SIDE[a] ?? 1) === (POS_SIDE[b] ?? 1);
+  if (ga === gb) return sameSide ? 7 : 5;
+  return Math.abs(LINE_ORDER[ga] - LINE_ORDER[gb]) === 1 ? (sameSide ? 3 : 2) : 1;
+}
+const offPosition = (playerPos, slotPos) => posFit(playerPos, slotPos) <= 2;   // ขึ้นสีแดงว่า "เล่นนอกตำแหน่ง"
+
+// จัดตัวจริงลงช่องของแผน: เก็บคนเดิมไว้ช่องเดิม (keep) แล้วเติมช่องว่างด้วยคู่ "คน–ช่อง" ที่เหมาะที่สุดทีละคู่
+function fixLineup(formation, starters, keep) {
+  const slots = FORMATIONS[formation], ids = new Set(starters.map(p => p.id)), used = new Set();
+  const lineup = slots.map((_, i) => {
+    const id = keep && keep[i];
+    if (id && ids.has(id) && !used.has(id)) { used.add(id); return id; }
+    return null;
+  });
+  const pool = starters.filter(p => !used.has(p.id));
+  while (pool.length && lineup.includes(null)) {
+    let best = null;
+    lineup.forEach((v, i) => {
+      if (v !== null) return;
+      pool.forEach(p => { const s = posFit(p.pos, slots[i].pos); if (!best || s > best.s) best = { i, p, s }; });
+    });
+    lineup[best.i] = best.p.id;
+    pool.splice(pool.indexOf(best.p), 1);
+  }
+  return lineup;
+}
+const lineupScore = (formation, starters, lineup) => lineup.reduce((sum, id, i) => {
+  const p = starters.find(x => x.id === id);
+  return sum + (p ? posFit(p.pos, FORMATIONS[formation][i].pos) : 0);
+}, 0);
+// ทีมเก่าที่ยังไม่มีแผน → เลือกแผนที่เข้ากับตำแหน่งตัวจริงมากที่สุด
+const guessFormation = starters => FORMATION_KEYS.reduce((best, k) => {
+  const score = lineupScore(k, starters, fixLineup(k, starters, []));
+  return !best || score > best.score ? { k, score } : best;
+}, null).k;
+
+function withFormation(team) {
+  const starters = team.players.filter(p => p.starter);
+  const formation = FORMATIONS[team.formation] ? team.formation : guessFormation(starters);
+  const lineup = fixLineup(formation, starters, formation === team.formation ? team.lineup : []);
+  const same = Array.isArray(team.lineup) && team.lineup.length === lineup.length && lineup.every((id, i) => id === team.lineup[i]);
+  return formation === team.formation && same ? team : { ...team, formation, lineup };
+}
+
 const blankSquad = teamId => DEFAULT_POS.map((pos, i) => ({ id: teamId + "-" + (i + 1), name: "", pos, starter: i < STARTERS }));
-// ข้อมูลเก่า/ไฟล์ import ที่ไม่มีนักเตะ หรือจำนวนไม่ครบ → เติมช่องว่างให้ครบ 23
+// ข้อมูลเก่า/ไฟล์ import ที่ไม่มีนักเตะ หรือจำนวนไม่ครบ → เติมช่องว่างให้ครบ 23 แล้วเติมแผนการเล่นถ้ายังไม่มี
 function withSquad(team) {
-  const base = Array.isArray(team.players) ? team.players.slice(0, SQUAD_SIZE) : [];
-  if (base.length === SQUAD_SIZE) return team;
-  const fill = blankSquad(team.id).filter(b => !base.some(p => p.id === b.id)).slice(0, SQUAD_SIZE - base.length);
-  return { ...team, players: base.concat(fill) };
+  const players = Array.isArray(team.players) ? team.players : [];
+  const base = players.slice(0, SQUAD_SIZE);
+  const fill = base.length === SQUAD_SIZE ? [] : blankSquad(team.id).filter(b => !base.some(p => p.id === b.id)).slice(0, SQUAD_SIZE - base.length);
+  return withFormation(players.length === SQUAD_SIZE ? team : { ...team, players: base.concat(fill) });
 }
 const namedPlayers = t => (t && t.players ? t.players : []).filter(p => (p.name || "").trim());
 const newPlayerId = teamId => teamId + "-" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
@@ -115,6 +192,7 @@ const SEED_SQUADS = {
 };
 // ประเภทการ์ดในข้อมูลตัวอย่าง: วนให้ดูหลากหลาย (ค่าพลัง OVR เว้นว่าง ให้ผู้จัดการทีมกรอกเอง)
 const SEED_CARDS = ["showtime", "bigtime", "epic", "highlight", "potw", "featured"];
+const SEED_FORMATION = { 1: "4-1-2-3", 2: "4-2-1-3", 3: "5-3-2", 4: "4-2-3-1", 5: "4-3-3", 6: "4-2-3-1" };
 const seedSquad = id => SEED_SQUADS[id].split("|").flatMap(part => part.split(",")).map((item, i) => {
   const [name, pos] = item.split(":");
   return { id: id + "-" + (i + 1), name, pos, starter: i < STARTERS, card: SEED_CARDS[(i + id) % SEED_CARDS.length], ovr: "", efhub: "" };
@@ -127,7 +205,7 @@ const SEED_TEAMS = [
   { id:4, name:"PAT ATHLETIC", owner:"แพท",   club:"Liverpool",       kit:"#D94A4A" },
   { id:5, name:"TON CITY",     owner:"ต้น",   club:"Barcelona",       kit:"#9B2B57" },
   { id:6, name:"MHOO FC",      owner:"หมู",   club:"Bayern Munich",   kit:"#C8452F" },
-].map(t => ({ ...t, players: seedSquad(t.id) }));
+].map(t => withSquad({ ...t, players: seedSquad(t.id), formation: SEED_FORMATION[t.id] }));
 
 // ผลงานตัวอย่าง: ตัวจริงลงเล่นครบ คะแนน = 6 + ประตู + ½·แอสซิสต์ ± ผลแพ้ชนะ · MOTM = คะแนนสูงสุด
 function seedPerf(m) {
@@ -147,7 +225,9 @@ function seedPerf(m) {
       if (!best || r > best.r) best = { teamId: tid, playerId: p.id, n: p.name, r };
     });
   });
-  return { ...m, perf, motm: { teamId: best.teamId, playerId: best.playerId, n: best.n } };
+  const formOf = tid => SEED_TEAMS.find(t => t.id === tid).formation;
+  return { ...m, perf, motm: { teamId: best.teamId, playerId: best.playerId, n: best.n },
+           formations: { [m.home]: formOf(m.home), [m.away]: formOf(m.away) } };
 }
 
 const SEED_MATCHES = [
@@ -627,6 +707,8 @@ async function renderStandingsPng(standings, subtitle) {
 // ป้ายภาษาไทย: ห้ามใส่ uppercase/tracking กว้าง ไม่งั้นสระกับวรรณยุกต์แยกออกจากตัวอักษร
 const LABEL = "text-xs text-muted";
 const INPUT = "w-full rounded-lg bg-sunken px-3 py-2.5 text-sm text-ink ring-1 ring-line/20 outline-none transition focus:ring-2 focus:ring-accent/70 placeholder:text-faint disabled:opacity-50";
+// ช่องเลือกแบบกว้างเท่าเนื้อหา (w-full ใน INPUT ชนะ w-auto เสมอ เลยต้องแยก)
+const INPUT_FIT = INPUT.replace("w-full", "w-auto");
 
 // ตัวเลขเด่น (แต้ม/สถิติ) = ไล่สีเหลือง
 const Hl = ({ children, className = "" }) => <span className={"fl-hl " + className}>{children}</span>;
@@ -876,7 +958,10 @@ const TeamCard = ({ t, rank, row, onOpen, onEdit, canEdit }) => {
             <div className="fl-tier-label font-display text-2xl font-bold italic sm:text-3xl">{r.P > 0 ? rank : "–"}</div>
             <div className="mt-1 text-[10px] text-muted">อันดับ</div>
           </div>
-          <span className="truncate pt-0.5 text-right text-[11px] text-muted">{t.club}</span>
+          <div className="min-w-0 pt-0.5 text-right leading-tight">
+            <div className="truncate text-[11px] text-muted">{t.club}</div>
+            {t.formation && <div className="font-display text-xs font-bold italic text-accent">{t.formation}</div>}
+          </div>
         </div>
         <div className="flex min-h-0 flex-1 items-center justify-center py-1">
           <Crest team={t} className="h-full max-h-[150px] w-auto max-w-[80%] drop-shadow-[0_8px_14px_rgba(0,0,0,0.45)]" />
@@ -958,8 +1043,11 @@ function NextMatch({ m, teams, standings, canEdit, onResult, onOpen }) {
       <div className="min-w-0">
         <div className="truncate font-display text-lg font-bold italic text-ink transition group-hover:text-accent sm:text-3xl">{t.name}</div>
         <div className="mt-0.5 truncate text-xs text-muted">{t.club} · {t.owner}</div>
-        <div className={"mt-2 flex h-5 gap-1 " + (right ? "justify-end" : "")}>
+        {/* ชื่อแผนอยู่ฝั่งที่ติดกับ VS · ฟอร์มเรียงเก่า → ใหม่เสมอ */}
+        <div className={"mt-2 flex h-5 items-center gap-1 " + (right ? "justify-end" : "")}>
+          {!right && t.formation && <span className="mr-1 font-display text-xs font-bold italic text-accent">{t.formation}</span>}
           {form(t.id).map((f, k) => <FormPill key={k} r={f} />)}
+          {right && t.formation && <span className="ml-1 font-display text-xs font-bold italic text-accent">{t.formation}</span>}
         </div>
       </div>
     </button>
@@ -1048,6 +1136,17 @@ function ResultModal({ match, teams, onClose, onSave }) {
   const [perf, setPerf] = useState(() => initPerf(match, [home, away]));
   const [motm, setMotm] = useState(match.motm && match.motm.playerId ? match.motm.teamId + "|" + match.motm.playerId : "");
   const [tab, setTab] = useState("events");
+  // แผนที่ใช้จริงในนัดนี้ (ค่าเริ่มต้น = แผนปัจจุบันของทีม)
+  const [forms, setForms] = useState(() => {
+    const saved = match.formations || {}, f = t => t ? saved[t.id] || withSquad(t).formation : "";
+    return { [match.home]: f(home), [match.away]: f(away) };
+  });
+  const formSelect = (t, right) => t && (
+    <select value={forms[t.id] || ""} onChange={e => setForms({ ...forms, [t.id]: e.target.value })} aria-label={"แผนที่ " + t.name + " ใช้ในนัดนี้"}
+      className={"mt-1 rounded bg-surface px-1.5 py-0.5 font-display text-xs font-bold italic text-accent ring-1 ring-line/25 outline-none focus:ring-accent/70 " + (right ? "ml-auto" : "")}>
+      {FORMATION_KEYS.map(k => <option key={k} value={k}>{k}</option>)}
+    </select>
+  );
   const teamOf = id => id === match.home ? home : away;
 
   const addEvent = () => setEvents([...events, { type:"goal", teamId:match.home, playerId:"", player:"", assistId:"", assist:"" }]);
@@ -1079,7 +1178,7 @@ function ResultModal({ match, teams, onClose, onSave }) {
       if (e) best = { teamId: +tid, playerId: pid, n: e.n };
     }
     const cleanEvents = events.filter(e => (e.player || "").trim()).map(e => ({ ...e, player: e.player.trim(), assist: (e.assist || "").trim() }));
-    onSave(match.id, hs, as, cleanEvents, outPerf, best);
+    onSave(match.id, hs, as, cleanEvents, outPerf, best, forms);
   };
 
   const SCORE = "h-12 w-12 rounded-lg bg-sunken text-center font-display text-2xl font-bold italic text-accent ring-1 ring-line/25 outline-none focus:ring-2 focus:ring-accent/70 sm:h-14 sm:w-14 sm:text-3xl";
@@ -1135,6 +1234,7 @@ function ResultModal({ match, teams, onClose, onSave }) {
         <div className="min-w-0 text-right">
           <div className="break-words font-display text-base font-bold italic leading-tight text-ink sm:text-lg">{home && home.name}</div>
           <div className="truncate text-xs text-muted">{home && home.club}</div>
+          <div className="flex">{formSelect(home, true)}</div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <input type="number" min="0" value={hs} onChange={e => setHs(+e.target.value)} aria-label="ประตูทีมเหย้า" className={SCORE} />
@@ -1144,6 +1244,7 @@ function ResultModal({ match, teams, onClose, onSave }) {
         <div className="min-w-0">
           <div className="break-words font-display text-base font-bold italic leading-tight text-ink sm:text-lg">{away && away.name}</div>
           <div className="truncate text-xs text-muted">{away && away.club}</div>
+          <div className="flex">{formSelect(away, false)}</div>
         </div>
       </div>
 
@@ -1281,12 +1382,31 @@ function TeamIdentity({ team, onSave }) {
 function SquadEditor({ team, onSave }) {
   const fresh = () => withSquad(team).players.map(p => ({ card: "", ovr: "", efhub: "", ...p, ovr: p.ovr == null ? "" : String(p.ovr) }));
   const [list, setList] = useState(fresh);
+  const [formation, setFormation] = useState(() => withSquad(team).formation);
+  const [lineup, setLineup] = useState(() => withSquad(team).lineup);
   const [msg, setMsg] = useState(null);
   const [bulk, setBulk] = useState("");
-  useEffect(() => { setList(fresh()); setMsg(null); }, [team.id]);
+  useEffect(() => {
+    const t = withSquad(team);
+    setList(fresh()); setFormation(t.formation); setLineup(t.lineup); setMsg(null);
+  }, [team.id]);
   const upd = (id, patch) => { setList(list.map(p => p.id === id ? { ...p, ...patch } : p)); setMsg(null); };
 
   const starters = list.filter(p => p.starter), subs = list.filter(p => !p.starter);
+  // ตัวจริงที่เปลี่ยน (สลับกับสำรอง / แทนที่คนใหม่) → คนเดิมอยู่ช่องเดิม ช่องที่ว่างเติมให้อัตโนมัติ
+  const lineupView = fixLineup(formation, starters, lineup);
+  const pickFormation = k => { setFormation(k); setLineup(fixLineup(k, starters, [])); setMsg(null); };
+  const autoArrange = () => { setLineup(fixLineup(formation, starters, [])); setMsg(null); };
+  const assign = (i, id) => {
+    const next = lineupView.slice(), j = next.indexOf(id);
+    if (j >= 0) next[j] = next[i];          // คนนี้อยู่ช่องอื่น → สลับกัน
+    next[i] = id;
+    setLineup(next); setMsg(null);
+  };
+  const offs = FORMATIONS[formation].map((s, i) => {
+    const p = list.find(x => x.id === lineupView[i]);
+    return p && offPosition(p.pos, s.pos) ? p : null;
+  }).filter(Boolean);
   const named = list.filter(p => p.name.trim());
   const lower = named.map(p => p.name.trim().toLowerCase());
   const dup = lower.find((n, i) => lower.indexOf(n) !== i);
@@ -1305,6 +1425,7 @@ function SquadEditor({ team, onSave }) {
   const warns = [
     named.length < SQUAD_SIZE && "ยังไม่ได้ใส่ชื่อ " + (SQUAD_SIZE - named.length) + " คน (บันทึกไว้ก่อนได้)",
     starters.length === STARTERS && gk !== 1 && "ตัวจริงควรมีผู้รักษาประตู (GK) 1 คน — ตอนนี้ " + gk + " คน",
+    offs.length > 0 && "เล่นนอกตำแหน่งในแผน " + formation + " " + offs.length + " คน: " + who(offs),
   ].filter(Boolean);
 
   const applyBulk = () => {
@@ -1315,8 +1436,8 @@ function SquadEditor({ team, onSave }) {
   const submit = e => {
     e.preventDefault();
     if (problems.length) return;
-    onSave(list.map(p => ({ ...p, name: p.name.trim(), efhub: (p.efhub || "").trim(), ovr: p.ovr === "" ? "" : +p.ovr })));
-    setMsg("บันทึกรายชื่อนักเตะแล้ว");
+    onSave(list.map(p => ({ ...p, name: p.name.trim(), efhub: (p.efhub || "").trim(), ovr: p.ovr === "" ? "" : +p.ovr })), formation, lineupView);
+    setMsg("บันทึกรายชื่อนักเตะและแผน " + formation + " แล้ว");
   };
 
   const row = (p, i) => {
@@ -1379,13 +1500,49 @@ function SquadEditor({ team, onSave }) {
       {noCard.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-accent/10 p-2.5 text-xs ring-1 ring-accent/25">
           <span className="text-ink">ตั้งการ์ดให้ {noCard.length} คนที่ยังไม่เลือก:</span>
-          <select value={bulk} onChange={e => setBulk(e.target.value)} aria-label="ประเภทการ์ดสำหรับทุกคนที่ยังไม่เลือก" className={INPUT + " w-auto px-2 py-1 text-xs"}>
+          <select value={bulk} onChange={e => setBulk(e.target.value)} aria-label="ประเภทการ์ดสำหรับทุกคนที่ยังไม่เลือก" className={INPUT_FIT + " px-2 py-1 text-xs"}>
             <option value="">— เลือก —</option>
             {CARD_TYPES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
           <Btn onClick={applyBulk} disabled={!bulk} className="px-4 py-1 text-xs">ใช้กับทุกคน</Btn>
         </div>
       )}
+      {/* ═══ แผนการเล่น: เลือกแผน + จัดตัวจริงลง 11 ช่อง ═══ */}
+      <div className="mb-5 rounded-xl bg-sunken/70 p-3 ring-1 ring-line/15">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="font-display text-sm font-semibold italic text-accent">แผนการเล่น</span>
+          <select value={formation} onChange={e => pickFormation(e.target.value)} aria-label="แผนการเล่น"
+            className={INPUT_FIT + " py-1.5 font-display font-bold italic text-accent"}>
+            {FORMATION_KEYS.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <Btn onClick={autoArrange} className="px-4 py-1 text-xs"><Ic n="wand" size={12} /> จัดตำแหน่งอัตโนมัติ</Btn>
+        </div>
+        <div className="grid gap-4 md:grid-cols-[minmax(0,240px)_1fr]">
+          <Pitch team={{ ...team, players: list, formation, lineup: lineupView }} />
+          <div>
+            {starters.length !== STARTERS && <p className="mb-2 text-xs text-loss">ตัวจริงต้องครบ 11 คนก่อน ถึงจะจัดลงแผนได้ครบทุกช่อง</p>}
+            <div className="grid gap-1.5 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-2">
+              {FORMATIONS[formation].map((s, i) => {
+                const p = list.find(x => x.id === lineupView[i]);
+                const off = p && offPosition(p.pos, s.pos);
+                return (
+                  <div key={i} className="grid grid-cols-[40px_1fr] items-center gap-2">
+                    <span className={"ef-pos ef-pos-" + posGroup(s.pos)}>{s.pos}</span>
+                    <select value={lineupView[i] || ""} onChange={e => assign(i, e.target.value)}
+                      aria-label={"ช่อง " + (i + 1) + " ตำแหน่ง " + s.pos}
+                      className={INPUT + " px-2 py-1 text-xs " + (off ? "text-loss ring-loss/60" : "")}>
+                      {!lineupView[i] && <option value="">— ว่าง —</option>}
+                      {starters.map(sp => <option key={sp.id} value={sp.id}>{sp.pos} · {sp.name.trim() || "(ยังไม่ใส่ชื่อ)"}</option>)}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-muted">เลือกนักเตะลงแต่ละช่อง ถ้าคนนั้นอยู่ช่องอื่นอยู่แล้วจะสลับกันให้ · กรอบแดง = เล่นนอกตำแหน่ง · ตัวจริง/สำรองเปลี่ยนได้ที่รายชื่อด้านล่าง</p>
+          </div>
+        </div>
+      </div>
+
       <div className="mb-1 font-display text-sm font-semibold italic text-accent">ตัวจริง</div>
       <div className="space-y-1.5">{starters.map(row)}</div>
       <div className="mb-1 mt-5 font-display text-sm font-semibold italic text-soft">สำรอง</div>
@@ -1583,7 +1740,7 @@ function UserManager({ me, users, teams, onAdd, onUpdate, onReset, onDelete }) {
                   <div className="truncate text-xs text-muted">@{u.username}{u.role === "manager" && " · " + (teamName(u.teamId) || "ยังไม่มีทีม")}</div>
                 </div>
                 <select value={u.role} disabled={self || lastAdmin} onChange={e => onUpdate(u.id, { role: e.target.value })}
-                  aria-label={"สิทธิ์ของ " + u.name} className={INPUT + " w-auto py-1.5"}>
+                  aria-label={"สิทธิ์ของ " + u.name} className={INPUT_FIT + " py-1.5"}>
                   <option value="admin">แอดมิน</option>
                   <option value="referee">กรรมการ</option>
                   <option value="manager">ผู้จัดการทีม</option>
@@ -1676,29 +1833,32 @@ function AccountModal({ user, users, teams, onClose, onLogout, onChangePassword,
   );
 }
 
-/* ══════════════════════════ PITCH (ตัวจริง 11 คนบนสนาม) ══════════════════════════ */
-function Pitch({ players }) {
-  const starters = players.filter(p => p.starter);
-  const rows = ["FW", "MF", "DF", "GK"].map(g => starters.filter(p => posGroup(p.pos) === g)
-    .sort((a, b) => (POS_SIDE[a.pos] ?? 1) - (POS_SIDE[b.pos] ?? 1)));
+/* ══════════════════════════ PITCH (ตัวจริง 11 คนตามแผนการเล่น) ══════════════════════════ */
+// ป้ายบนสนาม = ตำแหน่งของช่องในแผน (แบบในเกม) · ชื่อพื้นแดง = เล่นนอกตำแหน่งจริงของนักเตะ
+function Pitch({ team }) {
+  const t = withSquad(team);
+  const byId = id => t.players.find(p => p.id === id);
   return (
     <div className="ef-pitch aspect-[4/5] overflow-hidden rounded-xl ring-1 ring-line/20">
       <div className="ef-pitch-circle" />
-      <div className="relative grid h-full grid-rows-4 px-3 py-5">
-        {rows.map((row, i) => (
-          <div key={i} className="flex items-center justify-around gap-1">
-            {row.map(p => (
-              <div key={p.id} className="flex min-w-0 max-w-[25%] flex-col items-center gap-1">
-                <span className="flex items-center gap-1">
-                  <span className={"ef-pos ef-pos-" + posGroup(p.pos) + " shadow-[0_4px_10px_rgba(0,0,0,0.4)]"}>{p.pos}</span>
-                  {p.ovr !== "" && p.ovr != null && <span className="font-display text-xs font-bold italic text-white drop-shadow">{p.ovr}</span>}
-                </span>
-                <span className="max-w-full truncate rounded bg-black/45 px-1.5 py-0.5 text-[11px] font-medium text-white">{p.name || "—"}</span>
-              </div>
-            ))}
+      <span className="absolute bottom-3 left-3 z-10 rounded bg-black/50 px-2 py-0.5 font-display text-sm font-bold italic text-accent">{t.formation}</span>
+      {FORMATIONS[t.formation].map((s, i) => {
+        const p = byId(t.lineup[i]);
+        const off = p && offPosition(p.pos, s.pos);
+        return (
+          <div key={i} className="absolute flex w-[22%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
+            style={{ left: Math.min(89, Math.max(11, s.x)) + "%", top: s.y + "%" }}>
+            <span className="flex items-center gap-1">
+              <span className={"ef-pos ef-pos-" + posGroup(s.pos) + " shadow-[0_4px_10px_rgba(0,0,0,0.4)]"}>{s.pos}</span>
+              {p && p.ovr !== "" && p.ovr != null && <span className="font-display text-xs font-bold italic text-white drop-shadow">{p.ovr}</span>}
+            </span>
+            <span title={off ? "เล่นนอกตำแหน่ง (ตำแหน่งจริง " + p.pos + ")" : undefined}
+              className={"max-w-full truncate rounded px-1.5 py-0.5 text-[11px] font-medium text-white " + (off ? "bg-loss/80" : "bg-black/50")}>
+              {p ? p.name || "—" : "—"}
+            </span>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
@@ -1712,6 +1872,15 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
   const squad = withSquad(team).players;
   const mine = matches.filter(m => m.home === team.id || m.away === team.id).sort(byPlayOrder);
   const nameOf = id => { const t = teams.find(x => x.id === id); return t ? t.name : "—"; };
+  // ผลงานแยกตามแผนที่ใช้จริงในแต่ละนัด (บันทึกตอนกรอกผล)
+  const formStats = {};
+  mine.forEach(m => {
+    const k = m.status === "done" && m.formations && m.formations[team.id];
+    if (!k) return;
+    const home = m.home === team.id, gf = home ? m.hs : m.as, ga = home ? m.as : m.hs;
+    const s = formStats[k] || (formStats[k] = { P: 0, W: 0, D: 0, L: 0 });
+    s.P++; if (gf > ga) s.W++; else if (gf < ga) s.L++; else s.D++;
+  });
   const record = [["แข่ง", r.P], ["ชนะ", r.W], ["เสมอ", r.D], ["แพ้", r.L], ["ได้", r.GF], ["เสีย", r.GA], ["ผลต่าง", r.GD], ["แต้ม", r.PTS]];
   const tone = (l, v) => l === "แต้ม" ? "text-accent" : l !== "ผลต่าง" ? "text-ink" : v > 0 ? "text-win" : v < 0 ? "text-loss" : "text-ink";
   const st = p => statsByKey[team.id + "|" + p.id];
@@ -1777,8 +1946,24 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
 
       <div className="mt-6 grid gap-5 md:grid-cols-[minmax(0,300px)_1fr]">
         <div>
-          <SubHead>ตัวจริง 11 คน</SubHead>
-          <Pitch players={squad} />
+          <SubHead>ตัวจริง 11 คน · แผน {withSquad(team).formation}</SubHead>
+          <Pitch team={team} />
+          {Object.keys(formStats).length > 0 && (
+            <div className="mt-3 rounded-xl bg-sunken p-3 ring-1 ring-line/15">
+              <div className={LABEL + " mb-2"}>ผลงานตามแผนที่ใช้</div>
+              <div className="space-y-1.5">
+                {Object.entries(formStats).sort((a, b) => b[1].P - a[1].P).map(([k, s]) => (
+                  <div key={k} className="flex items-center gap-2 text-xs tabular-nums">
+                    <span className="w-16 shrink-0 font-display text-sm font-bold italic text-accent">{k}</span>
+                    <span className="text-soft">{s.P} นัด</span>
+                    <span className="ml-auto text-win">ชนะ {s.W}</span>
+                    <span className="text-muted">เสมอ {s.D}</span>
+                    <span className="text-loss">แพ้ {s.L}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div>
           <SubHead>รายชื่อนักเตะ ({namedPlayers(team).length}/23)</SubHead>
@@ -1805,6 +1990,9 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
                   <span className="w-16 shrink-0 text-[11px] text-muted">สัปดาห์ {m.round}</span>
                   <span className="w-9 shrink-0 text-[11px] text-muted">{home ? "เหย้า" : "เยือน"}</span>
                   <span className="min-w-0 flex-1 truncate text-ink">{nameOf(home ? m.away : m.home)}</span>
+                  {done && m.formations && m.formations[team.id] && (
+                    <span className="hidden shrink-0 font-display text-[11px] font-bold italic text-accent sm:inline">{m.formations[team.id]}</span>
+                  )}
                   {done ? (
                     <>
                       <span className="font-display font-bold italic text-ink">{gf}-{ga}</span>
@@ -2283,8 +2471,8 @@ function FriendsLeague() {
   };
 
   /* ── league data ── */
-  const saveResult = (id, hs, as, events, perf, motm) => {
-    setMatches(matches.map(m => m.id === id ? { ...m, hs, as, events, perf, motm, status:"done" } : m));
+  const saveResult = (id, hs, as, events, perf, motm, formations) => {
+    setMatches(matches.map(m => m.id === id ? { ...m, hs, as, events, perf, motm, formations, status:"done" } : m));
     setEditMatch(null);
   };
 
@@ -2324,10 +2512,11 @@ function FriendsLeague() {
     if (!(isAdmin || (myTeam && myTeam.id === id))) return;
     setTeams(teams.map(t => t.id === id ? { ...t, name: patch.name, kit: patch.kit } : t));
   };
-  const saveSquad = (id, players) => {
+  // รายชื่อ + แผนการเล่น + ตำแหน่งตัวจริงในแผน (ผู้จัดการทีมของทีมนี้ หรือแอดมิน)
+  const saveSquad = (id, players, formation, lineup) => {
     const t = teams.find(x => x.id === id);
     if (!t || !canEditSquad(t)) return;
-    setTeams(teams.map(x => x.id === id ? { ...x, players } : x));
+    setTeams(teams.map(x => x.id === id ? withSquad({ ...x, players, formation, lineup }) : x));
   };
 
   // ล้างแค่ข้อมูลลีก (ทีม/นัด) — บัญชีผู้ใช้ยังอยู่
@@ -2512,7 +2701,7 @@ function FriendsLeague() {
                 <Card className="p-5">
                   <SubHead>รายชื่อนักเตะ 23 คน</SubHead>
                   <p className="-mt-1 mb-4 text-xs leading-relaxed text-muted">ตัวจริงต้องมี 11 คน สำรอง 12 คน · กดปุ่ม “ตัวจริง/สำรอง” เพื่อสลับ · เลือกตำแหน่งได้ที่ป้ายสีด้านหน้า · ผลงานของนักเตะแต่ละคน แอดมินจะบันทึกให้หลังจบแต่ละนัด</p>
-                  <SquadEditor team={myTeam} onSave={players => saveSquad(myTeam.id, players)} />
+                  <SquadEditor team={myTeam} onSave={(players, formation, lineup) => saveSquad(myTeam.id, players, formation, lineup)} />
                 </Card>
               </div>
             )}
@@ -2647,7 +2836,7 @@ function FriendsLeague() {
         <TeamModal team={teamModal.id ? teamModal : null} users={users} onClose={() => setTeamModal(null)} onSave={saveTeam} onDelete={deleteTeam}
           onSquad={t => { setTeamModal(null); setSquadTeamId(t.id); }} />
       )}
-      {squadTeam && <SquadModal team={squadTeam} onClose={() => setSquadTeamId(null)} onSave={players => saveSquad(squadTeam.id, players)} />}
+      {squadTeam && <SquadModal team={squadTeam} onClose={() => setSquadTeamId(null)} onSave={(players, formation, lineup) => saveSquad(squadTeam.id, players, formation, lineup)} />}
       {profileTeam && (
         <TeamProfile team={profileTeam} rank={rankOf(profileTeam.id)} row={rowOf(profileTeam.id)}
           matches={matches} teams={teams} statsByKey={statsByKey}
