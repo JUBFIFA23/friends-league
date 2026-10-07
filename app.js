@@ -6,7 +6,7 @@
    สี: ใช้ชื่อ token (bg-surface, text-ink, text-accent …) ที่ประกาศใน index.html/style.css
    ════════════════════════════════════════════════════════════════ */
 
-const { useState, useMemo, useEffect, useRef } = React;
+const { useState, useMemo, useEffect, useRef, useContext } = React;
 
 /* ══════════════════════════ ICONS (SVG เขียนเอง ไม่ใช้ lucide) ══════════════════════════ */
 const P = {
@@ -40,6 +40,7 @@ const P = {
   shirt:'<path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/>',
   refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
   cloud:'<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+  image:'<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
   external:'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   mail:'<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
@@ -85,12 +86,12 @@ const FORMATIONS = {
   "4-3-1-2": [GK_SLOT, ...BACK4, slot("CMF", 22, 54), slot("DMF", 50, 60), slot("CMF", 78, 54), slot("AMF", 50, 36), slot("CF", 35, 14), slot("CF", 65, 14)],
   "4-2-3-1": [GK_SLOT, ...BACK4, slot("DMF", 36, 60), slot("DMF", 64, 60), slot("LMF", 14, 38), slot("AMF", 50, 36), slot("RMF", 86, 38), slot("CF", 50, 13)],
   "4-2-1-3": [GK_SLOT, ...BACK4, slot("CMF", 36, 56), slot("CMF", 64, 56), slot("AMF", 50, 38), slot("LWF", 16, 19), slot("CF", 50, 13), slot("RWF", 84, 19)],
-  "4-1-4-1": [GK_SLOT, ...BACK4, slot("DMF", 50, 61), slot("LMF", 12, 42), slot("CMF", 36, 45), slot("CMF", 64, 45), slot("RMF", 88, 42), slot("CF", 50, 13)],
-  "4-1-2-3": [GK_SLOT, ...BACK4, slot("DMF", 50, 61), slot("CMF", 32, 46), slot("CMF", 68, 46), slot("LWF", 16, 20), slot("CF", 50, 14), slot("RWF", 84, 20)],
+  "4-1-4-1": [GK_SLOT, ...BACK4, slot("DMF", 50, 59), slot("LMF", 12, 41), slot("CMF", 36, 43), slot("CMF", 64, 43), slot("RMF", 88, 41), slot("CF", 50, 13)],
+  "4-1-2-3": [GK_SLOT, ...BACK4, slot("DMF", 50, 59), slot("CMF", 32, 46), slot("CMF", 68, 46), slot("LWF", 16, 20), slot("CF", 50, 14), slot("RWF", 84, 20)],
   "3-4-3":   [GK_SLOT, ...BACK3, slot("LMF", 12, 48), slot("CMF", 37, 52), slot("CMF", 63, 52), slot("RMF", 88, 48), slot("LWF", 18, 20), slot("CF", 50, 14), slot("RWF", 82, 20)],
-  "3-2-4-1": [GK_SLOT, ...BACK3, slot("DMF", 36, 60), slot("DMF", 64, 60), slot("LMF", 10, 38), slot("AMF", 36, 34), slot("AMF", 64, 34), slot("RMF", 90, 38), slot("CF", 50, 13)],
-  "3-2-3-2": [GK_SLOT, ...BACK3, slot("DMF", 36, 60), slot("DMF", 64, 60), slot("LMF", 12, 40), slot("AMF", 50, 36), slot("RMF", 88, 40), slot("CF", 35, 14), slot("CF", 65, 14)],
-  "3-1-4-2": [GK_SLOT, ...BACK3, slot("DMF", 50, 61), slot("LMF", 10, 46), slot("CMF", 36, 48), slot("CMF", 64, 48), slot("RMF", 90, 46), slot("CF", 35, 14), slot("CF", 65, 14)],
+  "3-2-4-1": [GK_SLOT, ...BACK3, slot("DMF", 36, 58), slot("DMF", 64, 58), slot("LMF", 10, 38), slot("AMF", 36, 34), slot("AMF", 64, 34), slot("RMF", 90, 38), slot("CF", 50, 13)],
+  "3-2-3-2": [GK_SLOT, ...BACK3, slot("DMF", 36, 58), slot("DMF", 64, 58), slot("LMF", 12, 40), slot("AMF", 50, 36), slot("RMF", 88, 40), slot("CF", 35, 14), slot("CF", 65, 14)],
+  "3-1-4-2": [GK_SLOT, ...BACK3, slot("DMF", 50, 61), slot("LMF", 10, 44), slot("CMF", 36, 45), slot("CMF", 64, 45), slot("RMF", 90, 44), slot("CF", 35, 14), slot("CF", 65, 14)],
   "5-3-2":   [GK_SLOT, ...BACK5, slot("CMF", 25, 50), slot("DMF", 50, 55), slot("CMF", 75, 50), slot("CF", 35, 15), slot("CF", 65, 15)],
   "5-2-2-1": [GK_SLOT, ...BACK5, slot("CMF", 36, 54), slot("CMF", 64, 54), slot("SS", 30, 31), slot("SS", 70, 31), slot("CF", 50, 13)],
   "5-2-1-2": [GK_SLOT, ...BACK5, slot("CMF", 36, 54), slot("CMF", 64, 54), slot("AMF", 50, 36), slot("CF", 35, 14), slot("CF", 65, 14)],
@@ -178,6 +179,8 @@ const ovrOk = v => v === "" || v == null || (Number.isInteger(+v) && +v >= OVR_M
 // EFHUB ไม่มี API สาธารณะ → เก็บแค่ลิงก์การ์ด (efhub.com/players/<id>) + ปุ่มค้นหาผ่าน Google
 const EFHUB_RE = /^https:\/\/(?:www\.)?efhub\.com\/(?:[a-z]{2}(?:-[A-Z]{2})?\/)?players\/\d+\/?(?:[?#].*)?$/;
 const efhubOk = url => !url || EFHUB_RE.test(url.trim());
+// ลิงก์ที่ให้กดได้ต้องเป็นหน้าการ์ด EFHUB จริงเท่านั้น (ข้อมูลจาก Drive / Import อาจถูกแก้มา เช่น javascript:)
+const efhubHref = url => url && EFHUB_RE.test(url.trim()) ? url.trim() : "";
 const efhubSearch = name => "https://www.google.com/search?q=" + encodeURIComponent("site:efhub.com/players " + name);
 
 /* ══════════════════════════ SEED DATA (ตัวอย่างตอนเปิดครั้งแรก) ══════════════════════════ */
@@ -549,14 +552,20 @@ const Drive = {
   },
   meta(id)  { return this.call("/drive/v3/files/" + id + "?fields=id,name,version,modifiedTime,webViewLink,capabilities/canEdit,owners/displayName"); },
   read(id)  { return this.call("/drive/v3/files/" + id + "?alt=media"); },
+  // อัปโหลดแบบธรรมดาได้ไม่เกิน 5MB → เช็กก่อนส่ง (รูปการ์ดเยอะเกินจะติดตรงนี้)
+  body(doc) {
+    const json = JSON.stringify(doc);
+    if (new Blob([json]).size > 4.8 * 1024 * 1024) throw Object.assign(new Error("too big"), { tooBig: true });
+    return json;
+  },
   write(id, doc) {
     return this.call("/upload/drive/v3/files/" + id + "?uploadType=media&fields=id,version",
-      { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(doc) });
+      { method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: this.body(doc) });
   },
   create(doc) {
     const b = "fl" + Date.now();
     const body = "--" + b + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: "application/json" }) +
-      "\r\n--" + b + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(doc) + "\r\n--" + b + "--";
+      "\r\n--" + b + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + this.body(doc) + "\r\n--" + b + "--";
     return this.call("/upload/drive/v3/files?uploadType=multipart&fields=id,version", { method: "POST", headers: { "Content-Type": "multipart/related; boundary=" + b }, body });
   },
   // แชร์แบบแก้ไขได้ · Google ส่งอีเมลแจ้งเพื่อนให้เอง
@@ -584,7 +593,8 @@ const Drive = {
 };
 Drive.restore();
 
-const makeDoc = (data, by) => ({ app: DOC_APP, schema: 1, savedAt: new Date().toISOString(), savedBy: by || "", ...data });
+// images = รูปการ์ดที่นักเตะในไฟล์ใช้อยู่ { id: dataURL } → เครื่องอื่นได้รูปไปด้วย
+const makeDoc = (data, by, images) => ({ app: DOC_APP, schema: 2, savedAt: new Date().toISOString(), savedBy: by || "", ...data, images: images || {} });
 const validDoc = d => !!d && d.app === DOC_APP && Array.isArray(d.teams) && Array.isArray(d.matches);
 const docData = d => ({ teams: d.teams.map(withSquad), matches: d.matches, users: Array.isArray(d.users) ? d.users : [] });
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -618,7 +628,72 @@ const driveError = e =>
   e.badFile ? "ไฟล์นี้ไม่ใช่ไฟล์ลีก Friends League" :
   e.status === 404 ? "หาไฟล์ไม่เจอ หรือบัญชี Google นี้ไม่มีสิทธิ์เข้าถึง" :
   e.status === 403 ? "Google ไม่อนุญาต (ตรวจการตั้งค่า API / สิทธิ์ไฟล์)" :
+  e.tooBig ? "ไฟล์ลีกใหญ่เกิน 5MB (รูปการ์ดเยอะเกินไป) — ลบรูปการ์ดบางใบแล้วลองใหม่" :
   e.net ? "เชื่อมต่อไม่ได้ ตรวจอินเทอร์เน็ต" : "ซิงก์ไม่สำเร็จ (" + e.message + ")";
+
+/* ══════════════════════════ CARD IMAGES (รูปการ์ดนักเตะ) ══════════════════════════
+   localStorage จุแค่ ~5MB → รูปเก็บใน IndexedDB ของเบราว์เซอร์แทน
+   นักเตะเก็บแค่ player.img = id ของรูป (มาจาก hash ของเนื้อรูป → รูปเดียวกันได้ id เดียวกัน)
+   ย่อเหลือกว้าง 200px แบบ JPEG (~20–30KB ต่อใบ) · ซิงก์ Drive / Export JSON จะแนบรูปไปด้วย */
+const CARD_W = 200, CARD_H_MAX = 300;
+const IMG_DATA_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const ImgContext = React.createContext({ images: {}, putImage: async () => "" });
+
+const ImgDB = {
+  db: null,
+  open() {
+    if (!this.db) this.db = new Promise((res, rej) => {
+      if (!window.indexedDB) return rej(new Error("no-idb"));
+      setTimeout(() => rej(new Error("idb-timeout")), 5000);   // บางเบราว์เซอร์เปิดค้างไม่ตอบ → ทำงานต่อแบบไม่มี IndexedDB
+      const r = indexedDB.open("friends-league", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("cards");
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error || new Error("idb"));
+    });
+    return this.db;
+  },
+  async run(mode, fn) {
+    const db = await this.open();
+    return new Promise((res, rej) => {
+      const t = db.transaction("cards", mode), out = fn(t.objectStore("cards"));
+      t.oncomplete = () => res(out);
+      t.onerror = () => rej(t.error);
+      t.onabort = () => rej(t.error || new Error("idb-abort"));
+    });
+  },
+  async all() {
+    const r = await this.run("readonly", s => ({ keys: s.getAllKeys(), vals: s.getAll() }));
+    const m = {};
+    r.keys.result.forEach((k, i) => { m[k] = r.vals.result[i]; });
+    return m;
+  },
+  put(id, data) { return this.run("readwrite", s => { s.put(data, id); }); },
+  del(ids) { return this.run("readwrite", s => { ids.forEach(id => s.delete(id)); }); },
+};
+
+// ย่อรูปที่อัปโหลด → dataURL (JPEG ไม่มีความโปร่งใส → เติมพื้นสีน้ำเงินเข้มก่อน)
+async function makeCardImage(file) {
+  if (!file || !/^image\//.test(file.type)) throw new Error("ไฟล์นี้ไม่ใช่รูปภาพ");
+  if (file.size > 20 * 1024 * 1024) throw new Error("รูปใหญ่เกิน 20MB");
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error("เปิดรูปนี้ไม่ได้"));
+      i.src = url;
+    });
+    const scale = Math.min(1, CARD_W / img.naturalWidth, CARD_H_MAX / img.naturalHeight);
+    const w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const g = c.getContext("2d");
+    g.fillStyle = "#0B1C4A"; g.fillRect(0, 0, w, h);
+    g.drawImage(img, 0, 0, w, h);
+    return c.toDataURL("image/jpeg", 0.75);
+  } finally { URL.revokeObjectURL(url); }
+}
+const imageId = data => "c" + sha256(data).slice(0, 24);
 
 /* ══════════════════════════ SHARE IMAGE (วาดเองด้วย canvas) ══════════════════════════ */
 const SHARE = { page:"#060E2A", top:"#112A6B", bottom:"#0B1C4A", stroke:"rgba(150,180,255,0.22)", brand:"#FFDE2E", ink:"#FFFFFF",
@@ -736,8 +811,8 @@ const FormPill = ({ r }) => {
 const PosBadge = ({ pos }) => pos ? <span className={"ef-pos ef-pos-" + posGroup(pos)}>{pos}</span> : null;
 const CardBadge = ({ card }) => card ? <span className={"ef-card ef-card-" + card}>{cardLabel(card)}</span> : null;
 // ลิงก์ไปหน้าการ์ดใน EFHUB (เปิดแท็บใหม่)
-const EfhubLink = ({ url, name }) => url ? (
-  <a href={url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+const EfhubLink = ({ url, name }) => efhubHref(url) ? (
+  <a href={efhubHref(url)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
     aria-label={"ดูการ์ด " + name + " ใน EFHUB"} title="ดูการ์ดใน EFHUB" className="inline-grid shrink-0 place-items-center text-link hover:text-accent">
     <Ic n="external" size={12} />
   </a>
@@ -820,16 +895,25 @@ const Segmented = ({ value, onChange, items }) => (
   </div>
 );
 
+// หน้าต่างที่เปิดซ้อนกัน: Esc ปิดแค่ใบบนสุด
+const MODAL_STACK = [];
 const Modal = ({ children, onClose, className = "max-w-md" }) => {
+  const id = useRef({}).current;
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const onKey = e => { if (e.key === "Escape") onClose(); };
+    MODAL_STACK.push(id);
+    const onKey = e => { if (e.key === "Escape" && MODAL_STACK[MODAL_STACK.length - 1] === id) closeRef.current(); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => { window.removeEventListener("keydown", onKey); MODAL_STACK.splice(MODAL_STACK.indexOf(id), 1); };
+  }, []);
   return (
-    <div className="fl-scrim fixed inset-0 z-50 grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <Card className={"fl-enter max-h-[90vh] w-full overflow-y-auto rounded-2xl p-6 " + className}>{children}</Card>
-    </div>
+    // portal ไปที่ body: หน้าต่างซ้อนกันได้ (เช่น ดูการ์ดบนโปรไฟล์ทีม) ไม่โดนกรอบ/transform ของหน้าต่างแม่บัง
+    ReactDOM.createPortal(
+      <div className="fl-scrim fixed inset-0 z-50 grid place-items-center p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+        <Card className={"fl-enter max-h-[90vh] w-full overflow-y-auto rounded-2xl p-6 " + className}>{children}</Card>
+      </div>,
+      document.body)
   );
 };
 
@@ -1390,7 +1474,17 @@ function SquadEditor({ team, onSave }) {
     const t = withSquad(team);
     setList(fresh()); setFormation(t.formation); setLineup(t.lineup); setMsg(null);
   }, [team.id]);
-  const upd = (id, patch) => { setList(list.map(p => p.id === id ? { ...p, ...patch } : p)); setMsg(null); };
+  // อัปเดตแบบ functional: การอัปโหลดรูปทำงานแบบ async ห้ามทับการแก้อื่นที่เกิดระหว่างรอ
+  const upd = (id, patch) => { setList(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p)); setMsg(null); };
+  const { images, putImage } = useContext(ImgContext);
+  const [imgErr, setImgErr] = useState("");
+  const [busyImg, setBusyImg] = useState(null);
+  const upload = async (p, file) => {
+    setImgErr(""); setBusyImg(p.id);
+    try { upd(p.id, { img: await putImage(await makeCardImage(file)) }); }
+    catch (e) { setImgErr((p.name.trim() || "นักเตะ") + ": " + (e.message || "อัปโหลดรูปไม่สำเร็จ")); }
+    finally { setBusyImg(null); }
+  };
 
   const starters = list.filter(p => p.starter), subs = list.filter(p => !p.starter);
   // ตัวจริงที่เปลี่ยน (สลับกับสำรอง / แทนที่คนใหม่) → คนเดิมอยู่ช่องเดิม ช่องที่ว่างเติมให้อัตโนมัติ
@@ -1460,14 +1554,31 @@ function SquadEditor({ team, onSave }) {
               {p.starter ? "ตัวจริง" : "สำรอง"}
             </button>
             {p.name.trim() ? (
-              <button type="button" onClick={() => { if (confirm("แทนที่ " + p.name + " ด้วยนักเตะคนใหม่? (ผลงานเดิมยังอยู่ในประวัติ แต่ไม่นับให้คนใหม่)")) upd(p.id, { id: newPlayerId(team.id), name: "", card: "", ovr: "", efhub: "" }); }}
+              <button type="button" onClick={() => { if (confirm("แทนที่ " + p.name + " ด้วยนักเตะคนใหม่? (ผลงานเดิมยังอยู่ในประวัติ แต่ไม่นับให้คนใหม่)")) upd(p.id, { id: newPlayerId(team.id), name: "", card: "", ovr: "", efhub: "", img: "" }); }}
                 aria-label={"แทนที่ " + p.name + " ด้วยคนใหม่"} title="แทนที่ด้วยนักเตะคนใหม่"
                 className="grid h-7 w-7 place-items-center rounded text-muted hover:text-ink"><Ic n="refresh" size={13} /></button>
             ) : <span className="w-7" />}
           </div>
         </div>
-        {/* บรรทัดที่ 2: การ์ด · OVR · ลิงก์ EFHUB · ค้นหา (มือถือ: ลิงก์ขึ้นบรรทัดใหม่) */}
-        <div className="mt-1.5 grid grid-cols-[1fr_64px_36px] gap-2 pl-7 sm:grid-cols-[132px_64px_1fr_36px]">
+        {/* บรรทัดที่ 2: รูปการ์ด · ประเภทการ์ด · OVR · ลิงก์ EFHUB · ค้นหา (มือถือ: รูปสูง 2 แถว ลิงก์ขึ้นแถวใหม่) */}
+        <div className="mt-1.5 grid grid-cols-[36px_1fr_64px_36px] items-center gap-2 pl-7 sm:grid-cols-[32px_132px_64px_1fr_36px]">
+          <div className="relative row-span-2 h-full min-h-[44px] w-9 sm:row-span-1 sm:h-11 sm:w-8">
+            <label title={p.img ? "เปลี่ยนรูปการ์ด" : "อัปโหลดรูปการ์ด"}
+              className={"grid h-full w-full cursor-pointer place-items-center overflow-hidden rounded-md transition " +
+                (p.img && images[p.img] ? "ring-1 ring-white/30" : "border border-dashed border-line/35 text-muted hover:border-accent/60 hover:text-accent")}>
+              {busyImg === p.id ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-line/30 border-t-accent" />
+                : p.img && images[p.img] ? <img src={images[p.img]} alt="" className="h-full w-full object-cover object-top" />
+                : <Ic n="image" size={14} />}
+              <input type="file" accept="image/*" className="sr-only" aria-label={"รูปการ์ด " + label}
+                onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) upload(p, f); }} />
+            </label>
+            {p.img && (
+              <button type="button" onClick={() => upd(p.id, { img: "" })} aria-label={"ลบรูปการ์ด " + label} title="ลบรูปการ์ด"
+                className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-loss text-white shadow">
+                <Ic n="x" size={10} />
+              </button>
+            )}
+          </div>
           <select value={p.card || ""} onChange={e => upd(p.id, { card: e.target.value })} aria-label={"ประเภทการ์ด " + label}
             className={INPUT + " px-2 py-1.5 text-xs sm:order-1 " + (p.name.trim() && !p.card ? "ring-loss/60" : "")}>
             <option value="">— ประเภทการ์ด —</option>
@@ -1548,6 +1659,7 @@ function SquadEditor({ team, onSave }) {
       <div className="mb-1 mt-5 font-display text-sm font-semibold italic text-soft">สำรอง</div>
       <div className="space-y-1.5">{subs.map(row)}</div>
       <div className="mt-4 space-y-2">
+        {imgErr && <Note>{imgErr}</Note>}
         {problems.map(t => <Note key={t}>{t}</Note>)}
         {!problems.length && warns.map(t => <Note key={t} kind="warn">{t}</Note>)}
         {msg && !problems.length && <Note kind="ok">{msg}</Note>}
@@ -1834,17 +1946,48 @@ function AccountModal({ user, users, teams, onClose, onLogout, onChangePassword,
 }
 
 /* ══════════════════════════ PITCH (ตัวจริง 11 คนตามแผนการเล่น) ══════════════════════════ */
-// ป้ายบนสนาม = ตำแหน่งของช่องในแผน (แบบในเกม) · ชื่อพื้นแดง = เล่นนอกตำแหน่งจริงของนักเตะ
-function Pitch({ team }) {
+// การ์ดแทนคนที่ยังไม่มีรูป: สีทีม + ตำแหน่ง + OVR + ชื่อ
+const PlaceholderCard = ({ p, pos, kit }) => (
+  <div className="flex h-full w-full flex-col items-center justify-between px-[6%] py-[8%] text-white"
+    style={{ background: `linear-gradient(165deg, ${tint(kit, "e6")} 0%, #163478 55%, #0B1C4A 100%)` }}>
+    <span className={"ef-pos ef-pos-" + posGroup(pos)} style={{ minWidth: 0 }}>{pos}</span>
+    <span className="font-display text-base font-bold italic leading-none drop-shadow">{p && p.ovr !== "" && p.ovr != null ? p.ovr : ""}</span>
+    <span className="w-full truncate text-center text-[9px] font-semibold leading-tight drop-shadow">{p ? p.name || "—" : "ว่าง"}</span>
+  </div>
+);
+
+// การ์ดใบเดียว: รูปที่อัปโหลด หรือการ์ดแทน · กรอบแดง = เล่นนอกตำแหน่ง
+function PlayerCard({ p, pos, kit, off, className = "" }) {
+  const { images } = useContext(ImgContext);
+  const src = p && p.img && images[p.img];
+  return (
+    <div className={"relative aspect-[0.707] overflow-hidden rounded-[7%] shadow-[0_6px_14px_rgba(0,0,0,0.55)] " + (off ? "ring-2 ring-loss " : "ring-1 ring-white/25 ") + className}>
+      {src ? <img src={src} alt="" draggable={false} className="h-full w-full object-cover object-top" /> : <PlaceholderCard p={p} pos={pos} kit={kit} />}
+    </div>
+  );
+}
+
+// cards = แสดงเป็นการ์ด (สนามทรงสูง 2:3, การ์ดกว้าง 15% — คำนวณแล้วไม่ทับกันทุกแผน) · ไม่งั้นเป็นป้ายตำแหน่ง + ชื่อ
+// ป้ายบนสนาม = ตำแหน่งของช่องในแผน (แบบในเกม) · ชื่อพื้นแดง/กรอบแดง = เล่นนอกตำแหน่งจริงของนักเตะ
+function Pitch({ team, cards = false, onCard }) {
   const t = withSquad(team);
   const byId = id => t.players.find(p => p.id === id);
   return (
-    <div className="ef-pitch aspect-[4/5] overflow-hidden rounded-xl ring-1 ring-line/20">
+    <div className={"ef-pitch overflow-hidden rounded-xl ring-1 ring-line/20 " + (cards ? "aspect-[2/3]" : "aspect-[4/5]")}>
       <div className="ef-pitch-circle" />
       <span className="absolute bottom-3 left-3 z-10 rounded bg-black/50 px-2 py-0.5 font-display text-sm font-bold italic text-accent">{t.formation}</span>
       {FORMATIONS[t.formation].map((s, i) => {
         const p = byId(t.lineup[i]);
         const off = p && offPosition(p.pos, s.pos);
+        if (cards) return (
+          <button key={i} type="button" disabled={!p} onClick={() => p && onCard && onCard(p, s.pos)}
+            aria-label={p ? "ดูการ์ด " + (p.name || s.pos) + " (" + s.pos + ")" : "ช่อง " + s.pos + " ว่าง"}
+            title={p ? (p.name || "—") + " · " + s.pos + (off ? " · นอกตำแหน่ง (จริง " + p.pos + ")" : "") : undefined}
+            className="absolute w-[15%] -translate-x-1/2 -translate-y-1/2 rounded-[7%] outline-none transition-transform hover:z-10 hover:scale-110 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-accent"
+            style={{ left: Math.min(92, Math.max(8, s.x)) + "%", top: Math.min(92, Math.max(8, s.y)) + "%" }}>
+            <PlayerCard p={p} pos={s.pos} kit={t.kit} off={off} />
+          </button>
+        );
         return (
           <div key={i} className="absolute flex w-[22%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
             style={{ left: Math.min(89, Math.max(11, s.x)) + "%", top: s.y + "%" }}>
@@ -1860,6 +2003,33 @@ function Pitch({ team }) {
         );
       })}
     </div>
+  );
+}
+
+/* ══════════════════════════ CARD VIEWER (กดการ์ดบนสนาม → ดูใบใหญ่) ══════════════════════════ */
+function CardViewer({ p, team, slotPos, stats, onClose }) {
+  const s = stats || {};
+  const facts = [["นัด", s.apps || 0], ["ประตู", s.G || 0], ["แอสซิสต์", s.A || 0], ["เฉลี่ย", fmtAvg(s.avg)], ["MOTM", s.motm || 0]];
+  return (
+    <Modal onClose={onClose} className="max-w-sm">
+      <ModalHead kicker={team.name + (slotPos ? " · ยืน " + slotPos : "")} title={p.name || "—"} onClose={onClose} />
+      <PlayerCard p={p} pos={slotPos || p.pos} kit={team.kit} className="mx-auto w-48" />
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        <PosBadge pos={p.pos} />
+        <CardBadge card={p.card} />
+        {p.ovr !== "" && p.ovr != null && <span className="font-display text-lg font-bold italic text-ink">OVR {p.ovr}</span>}
+        {efhubHref(p.efhub) && <a href={efhubHref(p.efhub)} target="_blank" rel="noopener noreferrer" className="text-xs text-link hover:underline">ดูใน EFHUB ↗</a>}
+      </div>
+      {slotPos && offPosition(p.pos, slotPos) && <p className="mt-2 text-center text-xs text-loss">เล่นนอกตำแหน่ง: ตำแหน่งจริง {p.pos} แต่ยืน {slotPos}</p>}
+      <div className="mt-4 grid grid-cols-5 gap-1.5 text-center">
+        {facts.map(([l, v]) => (
+          <div key={l} className="rounded-lg bg-sunken px-1 py-2 ring-1 ring-line/15">
+            <div className="text-[10px] text-muted">{l}</div>
+            <div className="font-display text-base font-bold italic text-ink">{v}</div>
+          </div>
+        ))}
+      </div>
+    </Modal>
   );
 }
 
@@ -1884,12 +2054,22 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
   const record = [["แข่ง", r.P], ["ชนะ", r.W], ["เสมอ", r.D], ["แพ้", r.L], ["ได้", r.GF], ["เสีย", r.GA], ["ผลต่าง", r.GD], ["แต้ม", r.PTS]];
   const tone = (l, v) => l === "แต้ม" ? "text-accent" : l !== "ผลต่าง" ? "text-ink" : v > 0 ? "text-win" : v < 0 ? "text-loss" : "text-ink";
   const st = p => statsByKey[team.id + "|" + p.id];
+  // ตัวจริงแสดงเป็นการ์ดเมื่อมีรูปอย่างน้อย 1 ใบ (กดสลับเป็นรายชื่อได้)
+  const { images } = useContext(ImgContext);
+  const t = withSquad(team);
+  const hasCards = t.lineup.some(id => { const p = t.players.find(x => x.id === id); return p && p.img && images[p.img]; });
+  const [view, setView] = useState(null);
+  const shown = view || (hasCards ? "cards" : "names");
+  const [viewing, setViewing] = useState(null);
   const playerRow = p => {
     const s = st(p);
     return (
       <div key={p.id} className="grid grid-cols-[38px_1fr_28px_repeat(4,30px)] items-center gap-1.5 px-3 py-1.5 text-sm tabular-nums">
         <PosBadge pos={p.pos} />
         <span className="flex min-w-0 items-center gap-1.5">
+          {p.img && images[p.img] && (
+            <img src={images[p.img]} alt="" className="h-7 w-5 shrink-0 rounded-sm object-cover object-top ring-1 ring-white/20" />
+          )}
           <span className={"truncate " + (p.name ? "text-ink" : "text-faint")}>{p.name || "ยังไม่ใส่ชื่อ"}</span>
           <CardBadge card={p.name ? p.card : ""} />
           <EfhubLink url={p.name ? p.efhub : ""} name={p.name} />
@@ -1944,10 +2124,22 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
         </div>
       </div>
 
-      <div className="mt-6 grid gap-5 md:grid-cols-[minmax(0,300px)_1fr]">
-        <div>
-          <SubHead>ตัวจริง 11 คน · แผน {withSquad(team).formation}</SubHead>
-          <Pitch team={team} />
+      {/* ═══ ตัวจริง 11 คน: การ์ด / รายชื่อ ═══ */}
+      <div className="mt-6">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="font-display text-base font-semibold italic text-ink">ตัวจริง 11 คน · แผน {t.formation}</span>
+          <div className="flex gap-1 rounded-lg bg-sunken p-1 ring-1 ring-line/15" role="group" aria-label="รูปแบบการแสดงตัวจริง">
+            {[["cards", "การ์ด"], ["names", "รายชื่อ"]].map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setView(k)} aria-pressed={shown === k}
+                className={"ef-btn ef-tab px-3 py-1 text-xs " + (shown === k ? "ef-tab-on" : "")}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div className={"mx-auto " + (shown === "cards" ? "max-w-[520px]" : "max-w-[380px]")}>
+          <Pitch team={team} cards={shown === "cards"} onCard={(p, pos) => setViewing({ p, pos })} />
+          {shown === "cards" && !hasCards && (
+            <p className="mt-2 text-center text-xs text-muted">ยังไม่มีรูปการ์ด — อัปโหลดได้ที่ “แก้รายชื่อนักเตะ” (ปุ่มรูปภาพหน้าแต่ละคน)</p>
+          )}
           {Object.keys(formStats).length > 0 && (
             <div className="mt-3 rounded-xl bg-sunken p-3 ring-1 ring-line/15">
               <div className={LABEL + " mb-2"}>ผลงานตามแผนที่ใช้</div>
@@ -1965,6 +2157,13 @@ function TeamProfile({ team, rank, row, matches, teams, statsByKey, canEditTeam,
             </div>
           )}
         </div>
+      </div>
+      {viewing && (
+        <CardViewer p={viewing.p} team={team} slotPos={viewing.pos} stats={statsByKey[team.id + "|" + viewing.p.id]}
+          onClose={() => setViewing(null)} />
+      )}
+
+      <div className="mt-6">
         <div>
           <SubHead>รายชื่อนักเตะ ({namedPlayers(team).length}/23)</SubHead>
           <div className="rounded-xl bg-sunken ring-1 ring-line/15">
@@ -2280,6 +2479,49 @@ function FriendsLeague() {
   const [shareBlob, setShareBlob]   = useState(null);
   const [sharing, setSharing]       = useState(false);
 
+  /* ── รูปการ์ดนักเตะ (IndexedDB) ── */
+  const [images, setImages] = useState({});
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+  // เปิดแอป: โหลดรูปทั้งหมด แล้วลบรูปที่ไม่มีนักเตะคนไหนใช้แล้ว (เช่น อัปโหลดแล้วไม่ได้กดบันทึก)
+  // imgBoot: ต้องรอให้โหลดเสร็จก่อนเขียนไฟล์ Drive ไม่งั้นไฟล์จะไม่มีรูปที่ยังโหลดไม่ทัน
+  const imgBoot = useRef(null);
+  useEffect(() => {
+    imgBoot.current = ImgDB.all().then(m => {
+      const used = new Set();
+      teams.forEach(t => (t.players || []).forEach(p => { if (p.img) used.add(p.img); }));
+      const orphan = Object.keys(m).filter(id => !used.has(id));
+      if (orphan.length) ImgDB.del(orphan).catch(() => {});
+      orphan.forEach(id => { delete m[id]; });
+      imagesRef.current = { ...m, ...imagesRef.current };
+      setImages(prev => ({ ...m, ...prev }));
+    }).catch(() => {});
+  }, []);
+  const putImage = async data => {
+    const id = imageId(data);
+    try { await ImgDB.put(id, data); } catch (e) {}   // ไม่มี IndexedDB → ใช้ได้จนกว่าจะรีโหลด
+    setImages(prev => prev[id] ? prev : { ...prev, [id]: data });
+    return id;
+  };
+  // รับรูปจากไฟล์ Drive / ไฟล์ import (รับเฉพาะ data:image ที่ถูกรูปแบบ ไม่เกิน 400KB ต่อใบ)
+  const absorbImages = map => {
+    if (!map || typeof map !== "object") return;
+    const add = {};
+    Object.entries(map).forEach(([id, data]) => {
+      if (/^c[0-9a-f]{24}$/.test(id) && typeof data === "string" && data.length < 400000 && IMG_DATA_RE.test(data) && !imagesRef.current[id]) add[id] = data;
+    });
+    if (!Object.keys(add).length) return;
+    Object.entries(add).forEach(([id, data]) => ImgDB.put(id, data).catch(() => {}));
+    imagesRef.current = { ...imagesRef.current, ...add };
+    setImages(prev => ({ ...prev, ...add }));
+  };
+  // รูปที่นักเตะในข้อมูลชุดนี้ใช้อยู่ → แนบไปกับไฟล์ Drive / Export
+  const usedImages = teamList => {
+    const out = {};
+    teamList.forEach(t => (t.players || []).forEach(p => { if (p.img && imagesRef.current[p.img]) out[p.img] = imagesRef.current[p.img]; }));
+    return out;
+  };
+
   useEffect(() => save("fl_teams", teams), [teams]);
   useEffect(() => save("fl_matches", matches), [matches]);
   useEffect(() => save("fl_users", users), [users]);
@@ -2356,13 +2598,15 @@ function FriendsLeague() {
         if (!base || String(meta.version) !== String(base.version)) {
           const raw = await Drive.read(d.fileId);
           if (!validDoc(raw)) throw Object.assign(new Error("bad"), { badFile: true });
+          absorbImages(raw.images);
           const remote = docData(raw);
           next = base ? mergeData(base.data, local, remote) : remote;
           if (!sameJson(next, local)) applyData(next);
           if (sameJson(next, remote)) { setBase({ version: String(meta.version), data: next }); setSync({ s: "ok", at: Date.now(), msg: "" }); return; }
         } else if (sameJson(local, base.data)) { setSync({ s: "ok", at: Date.now(), msg: "" }); return; }
         if (meta.capabilities && meta.capabilities.canEdit === false) throw Object.assign(new Error("ro"), { readonly: true });
-        const res = await Drive.write(d.fileId, makeDoc(next, meRef.current));
+        await imgBoot.current;
+        const res = await Drive.write(d.fileId, makeDoc(next, meRef.current, usedImages(next.teams)));
         setBase({ version: String(res.version), data: next });
         setSync({ s: "ok", at: Date.now(), msg: "" });
       } catch (e) {
@@ -2397,8 +2641,9 @@ function FriendsLeague() {
   };
   const connectDrive = () => withGoogle(() => syncNow());
   const createDrive = () => withGoogle(async () => {
+    await imgBoot.current;
     const data = dataRef.current;
-    const f = await Drive.create(makeDoc(data, meRef.current));
+    const f = await Drive.create(makeDoc(data, meRef.current, usedImages(data.teams)));
     const meta = await Drive.meta(f.id);
     setBase({ version: String(meta.version), data });
     setDrive(driveInfo(f.id, meta));
@@ -2410,6 +2655,7 @@ function FriendsLeague() {
     const [meta, raw] = await Promise.all([Drive.meta(id), Drive.read(id)]);
     if (!validDoc(raw)) throw Object.assign(new Error("bad"), { badFile: true });
     if (!confirm("ข้อมูลในเครื่องนี้ (ทีม นักเตะ ผลการแข่ง บัญชี) จะถูกแทนที่ด้วยข้อมูลจากไฟล์ใน Drive · ดำเนินการต่อ?")) return;
+    absorbImages(raw.images);
     const data = docData(raw);
     applyData(data);
     setBase({ version: String(meta.version), data });
@@ -2540,9 +2786,9 @@ function FriendsLeague() {
     finally { setSharing(false); }
   };
 
-  /* ── Export / Import JSON (ทีม นักเตะ นัด — ไม่รวมบัญชีผู้ใช้) ── */
+  /* ── Export / Import JSON (ทีม นักเตะ นัด รูปการ์ด — ไม่รวมบัญชีผู้ใช้) ── */
   const exportData = () => {
-    const blob = new Blob([JSON.stringify({ teams, matches }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ teams, matches, images: usedImages(teams) }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "friends-league.json";
@@ -2559,6 +2805,7 @@ function FriendsLeague() {
         const d = JSON.parse(reader.result);
         if (Array.isArray(d.teams))   setTeams(d.teams.map(withSquad));
         if (Array.isArray(d.matches)) setMatches(d.matches);
+        absorbImages(d.images);
       } catch (e) { alert("ไฟล์ไม่ถูกต้อง"); }
     };
     reader.readAsText(file);
@@ -2590,6 +2837,7 @@ function FriendsLeague() {
   ];
 
   return (
+    <ImgContext.Provider value={{ images, putImage }}>
     <div className="relative min-h-screen text-soft antialiased">
 
       {/* ═══ HEADER ═══ */}
@@ -2700,7 +2948,7 @@ function FriendsLeague() {
                 </Card>
                 <Card className="p-5">
                   <SubHead>รายชื่อนักเตะ 23 คน</SubHead>
-                  <p className="-mt-1 mb-4 text-xs leading-relaxed text-muted">ตัวจริงต้องมี 11 คน สำรอง 12 คน · กดปุ่ม “ตัวจริง/สำรอง” เพื่อสลับ · เลือกตำแหน่งได้ที่ป้ายสีด้านหน้า · ผลงานของนักเตะแต่ละคน แอดมินจะบันทึกให้หลังจบแต่ละนัด</p>
+                  <p className="-mt-1 mb-4 text-xs leading-relaxed text-muted">ตัวจริงต้องมี 11 คน สำรอง 12 คน · กดปุ่ม “ตัวจริง/สำรอง” เพื่อสลับ · เลือกตำแหน่งได้ที่ป้ายสีด้านหน้า · กดช่องรูปหน้าแต่ละคนเพื่ออัปโหลดรูปการ์ด (โชว์บนสนามตัวจริงในโปรไฟล์ทีม) · ผลงานของนักเตะแต่ละคน แอดมินจะบันทึกให้หลังจบแต่ละนัด</p>
                   <SquadEditor team={myTeam} onSave={(players, formation, lineup) => saveSquad(myTeam.id, players, formation, lineup)} />
                 </Card>
               </div>
@@ -2857,6 +3105,7 @@ function FriendsLeague() {
           onShare={shareDrive} onDisconnect={disconnectDrive} />
       )}
     </div>
+    </ImgContext.Provider>
   );
 }
 
