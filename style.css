@@ -55,26 +55,40 @@ body::before {
     linear-gradient(180deg, #0B27C4 0%, rgb(var(--page)) 520px);
 }
 
-/* ══════════════════ ลายเหลืองแบบ eFootball 2022 (ใน index.html › .ef-stripes) ══════════════════
-   มุมขวาบน + มุมซ้ายล่าง · เส้นขนานกันไม่ตัดกัน · สีเหลืองทึบทั้งเส้น (ไม่หรี่ → ไม่เป็นสีขุ่น)
-   พุ่งเข้าตอนเปิด → ลอยขยับช้า ๆ + แสงวาบวิ่งผ่าน · ตัวหนังสือบนพื้นใช้ .ef-halo ให้อ่านง่าย */
+/* ══════════════════ กรอบขอบเว็บสีเหลือง (ใน index.html › .ef-stripes) ══════════════════
+   แบบ eFootball Championship: เศษแสงแหลม ๆ พุ่งจากขอบซ้าย/ขวา + ห้อยจากใต้แถบเมนู + พุ่งขึ้นจากมุมล่าง
+   แถบข้างกว้างเท่าที่ว่างข้างเนื้อหา (เนื้อหากว้าง 1152px = max-w-6xl) → ไม่ยื่นไปทับเนื้อหา · จอแคบเหลือขอบบาง 16px (ในระยะขอบ 20px ของ main)
+   พุ่งออกจากขอบตอนเปิด → ขยับเข้าออกเบา ๆ + บางชิ้นกะพริบแบบฟ้าแลบ · สีเหลืองทึบ (ไม่หรี่ → ไม่เป็นสีขุ่น)
+   ตัวหนังสือบนพื้นใช้ .ef-halo ให้อ่านง่าย */
 .ef-stripes { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.ef-stripes svg { position: absolute; width: clamp(320px, 40vw, 820px); height: auto; overflow: visible; }
-.ef-stripes .tr { top: 110px; right: 0; }   /* เริ่มใต้แถบเมนูด้านบน (สูง ~110–120px) ไม่ให้ลายหลบอยู่หลังเมนู */
-.ef-stripes .bl { bottom: 0; left: 0; }
+.ef-stripes svg { position: absolute; top: 110px; width: clamp(16px, calc(50vw - 576px), 10vw); height: calc(100% - 110px); overflow: visible; }   /* เริ่มใต้แถบเมนู */
+.ef-stripes .fl { left: 0; }
+.ef-stripes .fr { right: 0; }
 .ef-stripes .s { fill: rgb(var(--stripe)); }
-.ef-stripes .in, .ef-stripes .in-y { transform-box: fill-box; animation: ef-in .9s cubic-bezier(.2, .9, .25, 1) both; }
-.ef-stripes .tr .in { transform-origin: right center; }
-.ef-stripes .bl .in { transform-origin: left center; }
-.ef-stripes .in-y { transform-origin: center top; animation-name: ef-in-y; }
+.ef-stripes .bolt { fill: none; stroke: rgb(var(--stripe)); stroke-width: 7px; stroke-linejoin: miter; stroke-linecap: square; vector-effect: non-scaling-stroke; }
+.ef-stripes .in { transform-box: fill-box; animation: ef-in .7s cubic-bezier(.2, .9, .25, 1) both; }
+.ef-stripes .fl .in { transform-origin: left center; }
+.ef-stripes .fr .in { transform-origin: right center; }
+.ef-stripes .in.dn { transform-origin: center top; animation-name: ef-in-y; }      /* ห้อยลงจากใต้แถบเมนู */
+.ef-stripes .in.up { transform-origin: center bottom; animation-name: ef-in-y; }   /* พุ่งขึ้นจากขอบล่าง */
 @keyframes ef-in   { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes ef-in-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-.ef-stripes .drift { animation: ef-drift 9s ease-in-out 1.2s infinite alternate; }
-.ef-stripes .bl .drift { animation-duration: 11s; animation-direction: alternate-reverse; }
-@keyframes ef-drift { from { transform: translate(0, 0); } to { transform: translate(-18px, 8px); } }
-.ef-stripes .glint { animation: ef-glint 7s ease-in-out 1.6s infinite; }
-.ef-stripes .glint-b { animation-delay: 4.6s; }
-@keyframes ef-glint { 0% { transform: translateX(0); } 38%, 100% { transform: translateX(1500px); } }
+/* ขยับเข้าออกเบา ๆ (ซ้าย/ขวาจังหวะไม่เท่ากัน ดูมีชีวิต) */
+.ef-stripes .breathe { animation: ef-breathe-l 5.5s ease-in-out 1s infinite alternate; }
+.ef-stripes .fr .breathe { animation-name: ef-breathe-r; animation-duration: 6.5s; }
+@keyframes ef-breathe-l { to { transform: translateX(-7px); } }
+@keyframes ef-breathe-r { to { transform: translateX(7px); } }
+/* จอแคบ (ขอบบาง): เส้นบางลง + ขยับน้อยลง */
+@media (max-width: 1183px) {
+  .ef-stripes .bolt { stroke-width: 4px; }
+  @keyframes ef-breathe-l { to { transform: translateX(-3px); } }
+  @keyframes ef-breathe-r { to { transform: translateX(3px); } }
+}
+/* ฟ้าแลบ: กะพริบสั้น ๆ เป็นระยะ */
+.ef-stripes .flick { animation: ef-flick 7s linear 2s infinite; }
+.ef-stripes .flick-2 { animation-duration: 8.5s; animation-delay: 4s; }
+.ef-stripes .flick-3 { animation-duration: 9.5s; animation-delay: 6s; }
+@keyframes ef-flick { 0%, 90%, 100% { opacity: 1; } 92% { opacity: .2; } 94% { opacity: 1; } 96% { opacity: .45; } }
 
 /* ตัวหนังสือที่วางบนพื้นหลังโดยตรง (หัวข้อ ลิงก์ ท้ายหน้า): ขอบเงาสีพื้น → อ่านออกแม้ทับลายเหลือง */
 .ef-halo { text-shadow: 0 0 2px rgb(var(--page)), 0 0 4px rgb(var(--page)), 0 0 10px rgb(var(--page)), 0 0 22px rgb(var(--page) / .9); }
@@ -262,5 +276,4 @@ input[type=color]::-webkit-color-swatch {
 
 @media (prefers-reduced-motion: reduce) {
   *, .boot-ring { animation: none !important; transition: none !important; }
-  .ef-stripes .glint { display: none; }
 }

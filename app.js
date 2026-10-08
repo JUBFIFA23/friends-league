@@ -3310,7 +3310,7 @@ function FriendsLeague() {
       </main>
 
       {/* ═══ FOOTER ═══ */}
-      <footer className="ef-halo relative border-t border-line/10 py-7 text-center text-xs text-muted">
+      <footer className="ef-halo relative border-t border-line/10 px-5 py-7 text-center text-xs text-muted">
         <div>Friends League · eFootball 2027 Mobile · บันทึกผลด้วยมือ (ไม่เชื่อมต่อ Konami API)</div>
         <div className="mt-1">{CLOUD ? "ข้อมูลออนไลน์ · ทุกเครื่องเห็นข้อมูลเดียวกัน" : "โหมดเครื่องเดียว · ข้อมูลอยู่ในเบราว์เซอร์นี้เท่านั้น (ตั้งค่า Firebase เพื่อใช้ร่วมกันทุกเครื่อง)"}</div>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
