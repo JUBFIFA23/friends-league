@@ -7,6 +7,8 @@ rules_version = '2';
 // - เจ้าของลีก = คนแรกที่กด "ตั้งค่าแอดมิน" · ตั้งแล้วเปลี่ยนไม่ได้
 // - แอดมิน: แก้ได้ทุกอย่าง · ผู้จัดการทีม: แก้แค่ทีมตัวเอง · กรรมการ: แก้แค่ผลการแข่ง
 // - สิทธิ์อยู่ใน users/{uid} ซึ่งแอดมินเท่านั้นที่แก้ได้ → ผู้ใช้ตั้งตัวเองเป็นแอดมินไม่ได้
+// - สมัครเอง (ตอนแอดมินเปิดรับสมัคร): ได้แค่บทบาทผู้จัดการทีม + สร้างทีมใหม่ของตัวเอง 1 ทีม ในการบันทึกครั้งเดียวกัน
+// - รายชื่อบัญชีทั้งหมดอ่านได้เฉพาะแอดมิน · คนอื่นอ่านได้แค่บัญชีตัวเอง
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -16,6 +18,39 @@ service cloud.firestore {
     function isAdmin() { return role() == "admin"; }
     function ownerDoc() { return /databases/$(database)/documents/meta/owner; }
     function isOwner(uid) { return exists(ownerDoc()) && get(ownerDoc()).data.uid == uid; }
+    function settingsDoc() { return /databases/$(database)/documents/meta/settings; }
+    function teamDoc(id) { return /databases/$(database)/documents/teams/$(id); }
+
+    // เปิดรับสมัคร = มีเจ้าของลีกแล้ว และแอดมินไม่ได้ปิดไว้ (ยังไม่เคยตั้งค่า = เปิด)
+    function signupOpen() {
+      return exists(ownerDoc())
+        && (!exists(settingsDoc()) || get(settingsDoc()).data.get("signup", true) == true);
+    }
+
+    // สมัครเอง: บัญชีผู้จัดการทีม (ชื่อผู้ใช้ตรงกับที่ล็อกอิน) ของทีมที่ยังไม่มีมาก่อน และถูกสร้างในการบันทึกครั้งเดียวกัน
+    function selfSignup(d) {
+      return signupOpen()
+        && d.keys().hasOnly(["name", "username", "role", "teamId", "at"])
+        && d.role == "manager"
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 40
+        && d.username is string && request.auth.token.email == d.username + "@friends-league.example.com"
+        && d.teamId is int
+        && !exists(teamDoc(string(d.teamId)))
+        && existsAfter(teamDoc(string(d.teamId)));
+    }
+
+    // ทีมที่สร้างตอนสมัคร: บัญชีใหม่ (ยังไม่เคยมีบัญชีในลีก) ที่กำลังสมัครเป็นผู้จัดการของทีมนี้ในการบันทึกครั้งเดียวกัน
+    function selfTeam(teamId) {
+      let t = request.resource.data;
+      return signedIn() && signupOpen()
+        && !exists(myDoc()) && existsAfter(myDoc())
+        && getAfter(myDoc()).data.role == "manager"
+        && getAfter(myDoc()).data.teamId == t.id
+        && string(t.id) == teamId
+        && t.keys().hasOnly(["id", "name", "owner", "club", "kit", "players", "formation", "lineup"])
+        && t.name is string && t.name.size() > 0 && t.name.size() <= 24
+        && t.players is list && t.players.size() <= 30;
+    }
 
     // เจ้าของลีก: สร้างได้ครั้งเดียว (มีแล้ว → สร้างทับไม่ได้) และไม่มีใครแก้/ลบได้
     match /meta/owner {
@@ -25,18 +60,28 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid;
     }
 
+    // ตั้งค่าลีก (เปิด/ปิดรับสมัคร) — ทุกคนอ่านได้ เพื่อซ่อน/แสดงปุ่มสมัคร
+    match /meta/settings {
+      allow read: if true;
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(["signup"])
+        && request.resource.data.signup is bool;
+    }
+
     // บัญชีผู้ใช้ (ชื่อ / บทบาท / ทีมที่ดูแล) — รหัสผ่านอยู่ใน Firebase Authentication ไม่ได้อยู่ที่นี่
     match /users/{uid} {
-      allow read: if role() != "" || (signedIn() && uid == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && uid == request.auth.uid);
       allow create: if isAdmin()
-        || (signedIn() && uid == request.auth.uid && isOwner(uid) && request.resource.data.role == "admin");
+        || (signedIn() && uid == request.auth.uid && isOwner(uid) && request.resource.data.role == "admin")
+        || (signedIn() && uid == request.auth.uid && selfSignup(request.resource.data));
       allow update: if isAdmin() && (!isOwner(uid) || request.resource.data.role == "admin");
       allow delete: if isAdmin() && !isOwner(uid);
     }
 
     match /teams/{teamId} {
       allow read: if true;
-      allow create, delete: if isAdmin();
+      allow create: if isAdmin() || selfTeam(teamId);
+      allow delete: if isAdmin();
       allow update: if isAdmin()
         || (role() == "manager"
             && get(myDoc()).data.teamId == resource.data.id

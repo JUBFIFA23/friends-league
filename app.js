@@ -1635,7 +1635,8 @@ const LOGIN_GUARD = {};
 
 // setup = ยังไม่มีแอดมิน → สร้างแอดมินคนแรก · ไม่งั้นล็อกอิน
 // cloud: ตรวจรหัสที่ Firebase (onLogin/onSetup คืน Promise ของข้อความผิดพลาด "" = สำเร็จ)
-function LoginModal({ users, setup, cloud, onClose, onLogin, onSetup }) {
+// onSignup = แอดมินเปิดรับสมัคร → มีปุ่มไปหน้าสมัครผู้จัดการทีม (null = ปิดรับสมัคร)
+function LoginModal({ users, setup, cloud, onClose, onLogin, onSetup, onSignup }) {
   const [f, setF] = useState({ name: "", username: "", password: "", confirm: "" });
   const [err, setErr] = useState("");
   const [help, setHelp] = useState(false);
@@ -1708,6 +1709,11 @@ function LoginModal({ users, setup, cloud, onClose, onLogin, onSetup }) {
           <Ic n={setup ? "check" : "login"} size={15} />
           {busy ? (setup ? "กำลังสร้างบัญชี…" : "กำลังเข้าสู่ระบบ…") : setup ? "สร้างบัญชีแอดมิน" : "เข้าสู่ระบบ"}
         </Btn>
+        {!setup && onSignup && (
+          <Btn onClick={onSignup} className="mt-3 w-full justify-center py-2.5">
+            <Ic n="userPlus" size={15} /> ยังไม่มีบัญชี? สมัครผู้จัดการทีม
+          </Btn>
+        )}
 
         {!setup && (
           <button type="button" onClick={() => setHelp(!help)} className="mt-3 w-full text-center text-xs text-muted hover:text-ink">
@@ -1731,6 +1737,90 @@ function LoginModal({ users, setup, cloud, onClose, onLogin, onSetup }) {
         <p className="mt-4 border-t border-line/15 pt-3 text-center text-[11px] leading-relaxed text-muted">
           {cloud ? "บัญชีเก็บบนเซิร์ฟเวอร์ Firebase · ใช้ได้ทุกเครื่อง · ไม่มีใครเห็นรหัสผ่านของคุณ"
             : "บัญชีเก็บในเบราว์เซอร์เครื่องนี้เท่านั้น · รหัสผ่านถูกเข้ารหัส ไม่เก็บตัวจริง"}
+        </p>
+      </form>
+    </Modal>
+  );
+}
+
+/* ══════════════════════════ SIGN-UP (ผู้จัดการทีมสมัครเอง + สร้างทีมของตัวเอง) ══════════════════════════ */
+// ชื่อทีมว่าง / ซ้ำกับทีมที่มีอยู่ → ข้อความผิดพลาด ("" = ผ่าน)
+const teamNameError = (name, teams) => {
+  const k = (name || "").trim().toLowerCase();
+  if (!k) return "กรอกชื่อทีม";
+  return teams.some(t => (t.name || "").trim().toLowerCase() === k) ? "มีทีมชื่อนี้ในลีกแล้ว ตั้งชื่ออื่น" : "";
+};
+// ทีมใหม่ของคนที่สมัคร: ชื่อ/สโมสร/สีที่กรอก + ช่องนักเตะว่าง 23 ช่อง · เจ้าของทีม = ชื่อที่แสดงของคนสมัคร
+const newTeamFrom = (f, id) => withSquad({ id, name: f.team.trim().slice(0, 24), owner: f.name.trim().slice(0, 40),
+  club: (f.club || "").trim().slice(0, 40), kit: hexOk(f.kit) ? f.kit : "#2F78FF" });
+
+// เปิดตอนแอดมินเปิดรับสมัคร · onSignup(f) คืนข้อความผิดพลาด ("" = สำเร็จ → ล็อกอินเป็นผู้จัดการของทีมใหม่ให้เลย)
+function SignupModal({ users, teams, onClose, onSignup, onLogin }) {
+  const [f, setF] = useState({ name: "", username: "", password: "", confirm: "", team: "", club: "", kit: "#2F78FF" });
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => { setF({ ...f, [k]: v }); setErr(""); };
+  const submit = async e => {
+    e.preventDefault();
+    if (busy) return;
+    const msg = validateAccount(f, users, { needConfirm: true }) || teamNameError(f.team, teams);
+    if (msg) return setErr(msg);
+    setBusy(true);
+    const res = await onSignup(f);
+    setBusy(false);
+    if (res) setErr(res);
+  };
+
+  return (
+    <Modal onClose={onClose}>
+      <form onSubmit={submit} noValidate>
+        <div className="-mr-2 -mt-2 flex justify-end"><CloseBtn onClose={onClose} /></div>
+        <div className="mb-5 text-center">
+          <div className="ef-btn ef-brand mx-auto mb-4 grid h-12 w-14 place-items-center"><Ic n="userPlus" size={20} /></div>
+          <h3 className="font-display text-2xl font-bold italic text-ink">สมัครผู้จัดการทีม</h3>
+          <p className="mt-1 text-sm text-muted">สร้างบัญชีของคุณ + ทีมของคุณเองในขั้นตอนเดียว</p>
+        </div>
+
+        <SubHead>บัญชีของคุณ</SubHead>
+        <div className="space-y-3">
+          <Field label="ชื่อที่แสดง">
+            <input value={f.name} onChange={e => set("name", e.target.value)} placeholder="เช่น นนท์" autoComplete="nickname" maxLength={40} className={INPUT} />
+          </Field>
+          <Field label="ชื่อผู้ใช้" hint="a–z 0–9 _ . - ยาว 3–20 ตัว (ใช้ตอนล็อกอิน)">
+            <input value={f.username} onChange={e => set("username", e.target.value)} placeholder="เช่น nont"
+              autoComplete="username" autoCapitalize="none" spellCheck={false} className={INPUT} />
+          </Field>
+          <Field label="รหัสผ่าน" hint="อย่างน้อย 6 ตัว">
+            <PasswordInput value={f.password} onChange={v => set("password", v)} autoComplete="new-password" />
+          </Field>
+          <Field label="ยืนยันรหัสผ่าน">
+            <PasswordInput value={f.confirm} onChange={v => set("confirm", v)} autoComplete="new-password" />
+          </Field>
+        </div>
+
+        <div className="mt-6"><SubHead>ทีมของคุณ</SubHead></div>
+        <div className="mb-3 flex justify-center"><Crest team={{ name: f.team || "?", kit: f.kit }} className="h-20 w-auto" /></div>
+        <div className="space-y-3">
+          <Field label="ชื่อทีม">
+            <input value={f.team} onChange={e => set("team", e.target.value)} placeholder="เช่น NONT FC" maxLength={24} className={INPUT} />
+          </Field>
+          <div className="grid grid-cols-[1fr_96px] gap-3">
+            <Field label="สโมสรที่ใช้ในเกม">
+              <input value={f.club} onChange={e => set("club", e.target.value)} placeholder="เช่น Manchester City" maxLength={40} className={INPUT} />
+            </Field>
+            <Field label="สีทีม"><input type="color" value={f.kit} onChange={e => set("kit", e.target.value)} className="h-[42px] w-full rounded-lg" /></Field>
+          </div>
+          {err && <Note>{err}</Note>}
+        </div>
+
+        <Btn type="submit" variant="primary" disabled={busy} className="mt-5 w-full justify-center py-2.5">
+          <Ic n="check" size={15} /> {busy ? "กำลังสมัคร…" : "สมัครและสร้างทีม"}
+        </Btn>
+        <button type="button" onClick={onLogin} className="mt-3 w-full text-center text-xs text-muted hover:text-ink">
+          มีบัญชีแล้ว? เข้าสู่ระบบ
+        </button>
+        <p className="mt-4 border-t border-line/15 pt-3 text-center text-[11px] leading-relaxed text-muted">
+          สมัครแล้วเป็นผู้จัดการทีมนี้ทันที · ใส่รายชื่อนักเตะได้ที่แท็บ “ทีมของฉัน” · แอดมินแก้หรือลบทีมได้
         </p>
       </form>
     </Modal>
@@ -1782,7 +1872,8 @@ function TeamSelect({ value, onChange, teams, users, selfId, label }) {
 }
 
 // ownerId = เจ้าของลีก (ออนไลน์) → ลดสิทธิ์/ลบไม่ได้ · onReset = null → ตั้งรหัสแทนคนอื่นไม่ได้ (ออนไลน์)
-function UserManager({ me, users, teams, ownerId, onAdd, onUpdate, onReset, onDelete }) {
+// signup = เปิดให้ผู้จัดการทีมสมัครเองอยู่ไหม (null = ยังเปิดไม่ได้ เพราะกฎ Firebase ยังเป็นรุ่นเก่า)
+function UserManager({ me, users, teams, ownerId, signup, onSignupToggle, onAdd, onUpdate, onReset, onDelete }) {
   const blank = { name: "", username: "", password: "", role: "manager", teamId: null };
   const [f, setF] = useState(blank);
   const [msg, setMsg] = useState(null);
@@ -1813,6 +1904,19 @@ function UserManager({ me, users, teams, ownerId, onAdd, onUpdate, onReset, onDe
 
   return (
     <div>
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl bg-sunken p-3 ring-1 ring-line/15">
+        <div className="min-w-[180px] flex-1">
+          <div className="text-sm font-medium text-ink">ให้ผู้จัดการทีมสมัครเอง: {signup ? <span className="text-win">เปิดอยู่</span> : <span className="text-muted">ปิดอยู่</span>}</div>
+          <div className="mt-0.5 text-xs leading-relaxed text-muted">
+            {signup === null ? "ยังเปิดไม่ได้ — วางกฎใหม่จากไฟล์ firestore.rules ใน Firebase ก่อน (ดู README)"
+              : signup ? "เพื่อนกด “สมัครผู้จัดการทีม” ที่หน้าเข้าสู่ระบบ แล้วสร้างทีมของตัวเองได้ · ทีมครบแล้วกดปิด กันคนนอกสมัครเพิ่ม"
+              : "ตอนนี้มีแต่แอดมินที่เพิ่มบัญชีและทีมได้"}
+          </div>
+        </div>
+        <Btn variant={signup ? "ghost" : "primary"} disabled={signup === null} onClick={() => onSignupToggle(!signup)}>
+          {signup ? "ปิดรับสมัคร" : "เปิดรับสมัคร"}
+        </Btn>
+      </div>
       {msg && <div className="mb-3"><Note kind={msg.kind}>{msg.text}</Note></div>}
       <div className="divide-y divide-line/10 rounded-xl bg-sunken ring-1 ring-line/15">
         {users.map(u => {
@@ -1888,7 +1992,7 @@ function UserManager({ me, users, teams, ownerId, onAdd, onUpdate, onReset, onDe
   );
 }
 
-function AccountModal({ user, users, teams, ownerId, onClose, onLogout, onChangePassword, onAddUser, onUpdateUser, onResetPassword, onDeleteUser, onMyTeam }) {
+function AccountModal({ user, users, teams, ownerId, signup, onSignupToggle, onClose, onLogout, onChangePassword, onAddUser, onUpdateUser, onResetPassword, onDeleteUser, onMyTeam }) {
   const isAdmin = user.role === "admin";
   const [tab, setTab] = useState("password");
   const myTeam = user.role === "manager" ? teams.find(t => t.id === user.teamId) : null;
@@ -1917,7 +2021,8 @@ function AccountModal({ user, users, teams, ownerId, onClose, onLogout, onChange
         ? <Segmented value={tab} onChange={setTab} items={[["password", "เปลี่ยนรหัสผ่าน"], ["users", "จัดการผู้ใช้ (" + users.length + ")"]]} />
         : <SubHead>เปลี่ยนรหัสผ่าน</SubHead>}
       {tab === "users" && isAdmin
-        ? <UserManager me={user} users={users} teams={teams} ownerId={ownerId} onAdd={onAddUser} onUpdate={onUpdateUser} onReset={onResetPassword} onDelete={onDeleteUser} />
+        ? <UserManager me={user} users={users} teams={teams} ownerId={ownerId} signup={signup} onSignupToggle={onSignupToggle}
+            onAdd={onAddUser} onUpdate={onUpdateUser} onReset={onResetPassword} onDelete={onDeleteUser} />
         : <ChangePassword username={user.username} onSubmit={onChangePassword} />}
     </Modal>
   );
@@ -2552,6 +2657,7 @@ function FriendsLeague() {
   const [session, setSession] = useState(() => { if (CLOUD) return null; const s = load("fl_session", null); return s && s.exp > Date.now() ? s : null; });
   const [tab, setTab]         = useState("home");
   const [showLogin, setShowLogin]     = useState(false);
+  const [showSignup, setShowSignup]   = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [editMatch, setEditMatch]     = useState(null);
   const [teamModal, setTeamModal]     = useState(null);
@@ -2651,6 +2757,9 @@ function FriendsLeague() {
   const [cloudErr, setCloudErr] = useState("");
   const [noRole, setNoRole]     = useState(false);       // ล็อกอินแล้ว แต่ไม่มีบัญชีในลีก (ถูกลบ / ยังไม่ได้เพิ่ม)
   const [online, setOnline]     = useState(() => navigator.onLine !== false);
+  // เปิดให้ผู้จัดการทีมสมัครเองไหม (แอดมินเปิด/ปิด) · CLOUD: meta/settings · null = ยังไม่รู้ / อ่านไม่ได้ (กฎ Firebase รุ่นเก่า)
+  const [signup, setSignup]     = useState(() => CLOUD ? null : load("fl_settings", {}).signup !== false);
+  useEffect(() => { if (!CLOUD) save("fl_settings", { signup }); }, [signup]);
   const server     = useRef({ teams: null, matches: null, users: null });
   const ownerRef   = useRef(owner);
   const settingUp  = useRef(false);
@@ -2675,6 +2784,11 @@ function FriendsLeague() {
         if (!s.exists && s.metadata.fromCache) return;   // แคชยังไม่มี ≠ ไม่มีแอดมิน → รอคำตอบจากเซิร์ฟเวอร์
         setOwner(s.exists ? s.data() : null);
       }, bootFail));
+      // ยังไม่เคยตั้ง = เปิดรับสมัคร · อ่านไม่ได้ = ยังไม่ได้วางกฎ firestore.rules รุ่นใหม่ → ซ่อนปุ่มสมัคร
+      stops.push(db.doc("meta/settings").onSnapshot(meta, s => {
+        if (!s.exists && s.metadata.fromCache) return;
+        setSignup(s.exists ? (s.data() || {}).signup !== false : true);
+      }, () => setSignup(null)));
       const watch = (name, set) => db.collection(name).onSnapshot(meta, s => {
         if (s.empty && s.metadata.fromCache) return;
         let list = s.docs.map(d => d.data()).sort((a, b) => a.id - b.id);
@@ -2689,13 +2803,15 @@ function FriendsLeague() {
     return () => { alive = false; stops.forEach(f => f()); window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
 
-  // บัญชีของฉัน (users/{uid}) → มีแล้วค่อยฟังรายชื่อบัญชีทั้งหมด (กฎให้อ่านได้เฉพาะคนที่มีบัญชีในลีก)
+  // บัญชีของฉัน (users/{uid}) → แอดมินฟังรายชื่อบัญชีทั้งหมดต่อ · คนอื่นเห็นแค่บัญชีตัวเอง (กฎให้อ่านเท่านี้)
   useEffect(() => {
     if (!CLOUD) return;
     let stopList = null;
     const clear = () => { if (stopList) { stopList(); stopList = null; } server.current.users = null; setUsers([]); };
     if (!authUid) { clear(); setNoRole(false); return; }
     const db = Cloud.db;
+    // ออกจากระบบแล้ว (ตัวฟังยังไม่ทันปิด) → อ่านไม่ผ่านเป็นเรื่องปกติ ไม่ต้องเตือน
+    const mine = e => { const cur = Cloud.auth.currentUser; if (cur && cur.uid === authUid) failed(e); };
     const stopMe = db.doc("users/" + authUid).onSnapshot({ includeMetadataChanges: true }, s => {
       if (!s.exists && s.metadata.fromCache) return;
       if (!s.exists) {
@@ -2710,13 +2826,20 @@ function FriendsLeague() {
         return;
       }
       setNoRole(false);
-      if (stopList) return;
+      const me = { ...s.data(), id: s.id }, admin = me.role === "admin";
+      if (!admin && stopList) { stopList(); stopList = null; }
+      if (!stopList) {   // ยังไม่ได้ฟังรายชื่อทั้งหมด → เห็นบัญชีตัวเองไปก่อน
+        server.current.users = new Map([[me.id, me]]);
+        setUsers(prev => prev.length === 1 && stable(prev[0]) === stable(me) ? prev : [me]);
+      }
+      // แอดมิน: รอเซิร์ฟเวอร์บันทึกบัญชีนี้ก่อน (เพิ่งตั้งค่าแอดมิน) ไม่งั้นกฎยังไม่รู้ว่าเป็นแอดมิน → อ่านรายชื่อไม่ผ่าน
+      if (!admin || stopList || s.metadata.hasPendingWrites) return;
       stopList = db.collection("users").onSnapshot(q => {
         const list = q.docs.map(d => ({ ...d.data(), id: d.id })).sort((a, b) => (a.at || 0) - (b.at || 0));
         server.current.users = new Map(list.map(u => [u.id, u]));
         setUsers(list);
-      }, failed);
-    }, failed);
+      }, mine);
+    }, mine);
     return () => { stopMe(); clear(); };
   }, [authUid]);
 
@@ -2818,6 +2941,46 @@ function FriendsLeague() {
       return "";
     } catch (e) { return cloudError(e); }
     finally { settingUp.current = false; }
+  };
+  // ผู้จัดการทีมสมัครเอง (ตอนแอดมินเปิดรับสมัคร): สร้างบัญชี + ทีมใหม่ของตัวเอง แล้วล็อกอินเป็นผู้จัดการทีมนั้นทันที
+  const signupOpen = signup === true && !needSetup;
+  const canSignup  = signupOpen && !user && !(CLOUD && authUid);   // ปุ่มสมัคร: เฉพาะคนที่ยังไม่ได้ล็อกอิน
+  const SIGNUP_CLOSED = "ลีกนี้ปิดรับสมัครแล้ว — ติดต่อแอดมิน";
+  const signupLocal = f => {
+    if (!signupOpen) return SIGNUP_CLOSED;
+    const id = uniqueId();
+    const nu = makeUser({ ...f, name: f.name.slice(0, 40), role: "manager", teamId: id }, users);
+    setTeams(ts => [...ts, newTeamFrom(f, id)]);
+    setUsers(us => [...us, nu]);
+    setShowSignup(false);
+    login(nu);
+    return "";
+  };
+  // CLOUD: บัญชีกับทีมบันทึกพร้อมกันในชุดเดียว (กฎตรวจว่าเป็นทีมใหม่ของบัญชีใหม่) · ไม่ผ่าน → ลบบัญชีที่เพิ่งสร้างทิ้ง
+  const cloudSignup = async f => {
+    if (!signupOpen) return SIGNUP_CLOSED;
+    settingUp.current = true;
+    afterLogin.current = true;
+    let cred = null;
+    try {
+      cred = await Cloud.auth.createUserWithEmailAndPassword(Cloud.email(f.username), f.password);
+      const id = uniqueId(), db = Cloud.db, batch = db.batch();
+      batch.set(db.doc("teams/" + id), plain(newTeamFrom(f, id)));
+      batch.set(db.doc("users/" + cred.user.uid), { name: f.name.trim().slice(0, 40), username: normUser(f.username), role: "manager", teamId: id, at: Date.now() });
+      await batch.commit();
+      setShowSignup(false);
+      return "";
+    } catch (e) {
+      afterLogin.current = false;
+      if (cred) await cred.user.delete().catch(() => {});
+      return e && e.code === "permission-denied" ? SIGNUP_CLOSED
+        : e && e.code === "auth/invalid-email" ? "ชื่อผู้ใช้นี้ใช้ไม่ได้ ลองชื่ออื่น" : cloudError(e);
+    } finally { settingUp.current = false; }
+  };
+  const setSignupOpen = open => {
+    if (!isAdmin) return;
+    if (!CLOUD) return setSignup(open);
+    Cloud.db.doc("meta/settings").set({ signup: open }).catch(failed);
   };
   const logout = () => {
     if (CLOUD) Cloud.auth.signOut().catch(failed); else setSession(null);
@@ -3134,12 +3297,16 @@ function FriendsLeague() {
                       )}
                       <Btn onClick={useSample}><Ic n="sparkles" size={14} /> ใช้ข้อมูลตัวอย่าง</Btn>
                     </div>
-                    <p className="mt-3 text-xs text-muted">บัญชีผู้จัดการทีม/กรรมการ ต้องสร้างใหม่ในเมนูบัญชี › จัดการผู้ใช้</p>
+                    <p className="mt-3 text-xs text-muted">ผู้จัดการทีมสมัครเองได้ (เปิด/ปิดที่เมนูบัญชี › จัดการผู้ใช้) · บัญชีกรรมการสร้างที่เมนูเดียวกัน</p>
                   </>
                 ) : (
-                  <p className="mt-2 text-sm text-muted">
-                    {needSetup ? "ยังไม่ได้ตั้งค่าแอดมิน — เจ้าของลีกกด “ตั้งค่าแอดมิน” มุมขวาบนเพื่อเริ่ม" : "รอแอดมินเพิ่มทีมและโปรแกรมการแข่ง"}
-                  </p>
+                  <>
+                    <p className="mt-2 text-sm text-muted">
+                      {needSetup ? "ยังไม่ได้ตั้งค่าแอดมิน — เจ้าของลีกกด “ตั้งค่าแอดมิน” มุมขวาบนเพื่อเริ่ม"
+                        : canSignup ? "ยังไม่มีทีม — สมัครเป็นผู้จัดการทีมแล้วส่งทีมของคุณเข้าลีกได้เลย" : "รอแอดมินเพิ่มทีมและโปรแกรมการแข่ง"}
+                    </p>
+                    {canSignup && <Btn variant="primary" className="mt-4" onClick={() => setShowSignup(true)}><Ic n="userPlus" size={14} /> สมัคร + สร้างทีมของคุณ</Btn>}
+                  </>
                 )}
               </Card>
             )}
@@ -3300,7 +3467,9 @@ function FriendsLeague() {
         {tab === "teams" && (
           <div className="fl-enter">
             <SectionTitle icon="users" kicker="Squad Collection" title="ทีมทั้งหมด"
-              action={isAdmin ? <Btn variant="primary" onClick={() => setTeamModal({})}><Ic n="plus" size={15} /> สร้างทีมใหม่</Btn> : null} />
+              action={isAdmin ? <Btn variant="primary" onClick={() => setTeamModal({})}><Ic n="plus" size={15} /> สร้างทีมใหม่</Btn>
+                : canSignup ? <Btn variant="primary" onClick={() => setShowSignup(true)}><Ic n="userPlus" size={15} /> สมัคร + สร้างทีมของคุณ</Btn>
+                : null} />
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {teams.map(teamCard)}
             </div>
@@ -3334,10 +3503,16 @@ function FriendsLeague() {
 
       {showLogin && (
         <LoginModal users={users} setup={needSetup} cloud={CLOUD} onClose={() => setShowLogin(false)}
-          onLogin={CLOUD ? cloudLogin : login} onSetup={CLOUD ? cloudSetup : setupAdmin} />
+          onLogin={CLOUD ? cloudLogin : login} onSetup={CLOUD ? cloudSetup : setupAdmin}
+          onSignup={signupOpen ? () => { setShowLogin(false); setShowSignup(true); } : null} />
+      )}
+      {showSignup && (
+        <SignupModal users={users} teams={teams} onClose={() => setShowSignup(false)}
+          onSignup={CLOUD ? cloudSignup : signupLocal} onLogin={() => { setShowSignup(false); setShowLogin(true); }} />
       )}
       {showAccount && user && (
         <AccountModal user={user} users={users} teams={teams} onClose={() => setShowAccount(false)} onLogout={logout}
+          signup={signup} onSignupToggle={setSignupOpen}
           onChangePassword={changePassword} onAddUser={addUser} onUpdateUser={updateUser} ownerId={ownerId}
           onResetPassword={CLOUD ? null : resetPassword} onDeleteUser={deleteUser}
           onMyTeam={() => { setShowAccount(false); setTab("myteam"); }} />
