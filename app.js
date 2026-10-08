@@ -2648,6 +2648,68 @@ function PlayersTab({ stats, matches, teams, imageSetter }) {
   );
 }
 
+/* ══════════════════════════ CLEAR DATA (แอดมิน: ล้างข้อมูลทีละหมวด) ══════════════════════════ */
+// นัดที่แข่งแล้ว → กลับเป็นยังไม่แข่ง (คู่แข่ง สัปดาห์ วันเวลายังอยู่)
+const unplayed = ({ perf, motm, formations, ...m }) => ({ ...m, hs: null, as: null, status: "scheduled", events: [] });
+// รายชื่อนักเตะกลับเป็นช่องว่าง 23 ช่อง · id ใหม่ → ผลงานเก่ายังดูได้แบบ "อดีต" · ชื่อทีม สี สโมสร แผนการเล่นยังอยู่
+const clearSquad = t => {
+  const stamp = Date.now().toString(36);
+  return withSquad({ ...t, players: blankSquad(t.id).map((p, i) => ({ ...p, id: t.id + "-" + stamp + "-" + (i + 1) })), lineup: [] });
+};
+// หมวดใหญ่ครอบหมวดเล็ก: ลบทีม → ต้องลบนัดด้วย (นัดผูกกับทีม) · ลบโปรแกรม → ผลการแข่งหายด้วย
+const CLEAR_KINDS = [
+  { k: "results", label: "ผลการแข่ง",
+    desc: c => c.done + " นัดที่แข่งแล้วกลับเป็นยังไม่แข่ง · ตารางคะแนนและสถิตินักเตะเริ่มนับใหม่ · คู่แข่งและวันเวลายังอยู่" },
+  { k: "matches", label: "โปรแกรมการแข่งทั้งหมด", covers: ["results"],
+    desc: c => "ลบทั้ง " + c.matches + " นัด รวมผลการแข่ง · จัดโปรแกรมใหม่ได้ที่แท็บโปรแกรม/ผล" },
+  { k: "squads", label: "รายชื่อนักเตะทุกทีม",
+    desc: c => "นักเตะ การ์ด OVR ลิงก์ EFHUB และรูปการ์ดของทั้ง " + c.teams + " ทีมกลับเป็นช่องว่าง · ชื่อทีม สี สโมสร และแผนการเล่นยังอยู่" },
+  { k: "teams", label: "ทีมทั้งหมด", covers: ["results", "matches", "squads"],
+    desc: c => "ลบทั้ง " + c.teams + " ทีม พร้อมนักเตะและโปรแกรมการแข่ง · บัญชีผู้จัดการทีมยังอยู่ แต่จะยังไม่มีทีม (แอดมินผูกทีมให้ใหม่ได้)" },
+];
+
+function ClearDataModal({ counts, cloud, onClose, onExport, onClear }) {
+  const [pick, setPick] = useState({});
+  const coveredBy = k => CLEAR_KINDS.find(x => pick[x.k] && (x.covers || []).includes(k));
+  const on = k => !!pick[k] || !!coveredBy(k);
+  const chosen = CLEAR_KINDS.filter(x => on(x.k));
+  const submit = () => {
+    if (!chosen.length) return;
+    if (!confirm("ล้าง: " + chosen.map(x => x.label).join(" · ") + "?\n\nย้อนกลับไม่ได้" + (cloud ? " · ทุกเครื่องจะเห็นข้อมูลที่ล้างแล้วทันที" : ""))) return;
+    onClear({ results: on("results"), matches: on("matches"), squads: on("squads"), teams: on("teams") });
+  };
+
+  return (
+    <Modal onClose={onClose}>
+      <ModalHead kicker="แอดมิน" title="ล้างข้อมูล" onClose={onClose} />
+      <p className="-mt-3 mb-4 text-sm leading-relaxed text-muted">เลือกเฉพาะหมวดที่จะล้าง หมวดที่ไม่ได้ติ๊กจะไม่ถูกแตะ · บัญชีผู้ใช้ไม่ถูกลบ</p>
+      <div className="space-y-2">
+        {CLEAR_KINDS.map(x => {
+          const by = coveredBy(x.k);
+          return (
+            <label key={x.k} className={"flex items-start gap-3 rounded-lg bg-sunken p-3 ring-1 transition " + (on(x.k) ? "ring-loss/40 " : "ring-line/15 ") + (by ? "opacity-70" : "cursor-pointer")}>
+              <input type="checkbox" checked={on(x.k)} disabled={!!by} onChange={e => setPick({ ...pick, [x.k]: e.target.checked })}
+                aria-label={x.label} className="mt-0.5 h-4 w-4 shrink-0 accent-[#FFDE2E]" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-ink">{x.label}{by && <span className="font-normal text-muted"> · รวมอยู่ใน “{by.label}”</span>}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-muted">{x.desc(counts)}</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent/10 px-3 py-2 ring-1 ring-accent/25">
+        <span className="min-w-[160px] flex-1 text-xs leading-relaxed text-accent">ย้อนกลับไม่ได้ — กด Export JSON เก็บไว้ก่อน</span>
+        <Btn onClick={onExport} className="px-3 py-1 text-xs"><Ic n="download" size={12} /> Export JSON</Btn>
+      </div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Btn onClick={onClose}>ยกเลิก</Btn>
+        <Btn variant="danger" disabled={!chosen.length} onClick={submit}><Ic n="trash" size={14} /> ล้างข้อมูลที่เลือก</Btn>
+      </div>
+    </Modal>
+  );
+}
+
 /* ══════════════════════════ MAIN APP ══════════════════════════ */
 function FriendsLeague() {
   // CLOUD: ข้อมูลมาจาก Firestore (เริ่มว่าง รอโหลด) · ไม่งั้นเก็บในเบราว์เซอร์ (ครั้งแรก = ข้อมูลตัวอย่าง)
@@ -2665,6 +2727,7 @@ function FriendsLeague() {
   const [profileId, setProfileId]     = useState(null);
   const [matchEdit, setMatchEdit]     = useState(null);   // {} = เพิ่มนัดใหม่ · match = แก้นัด
   const [fixtureOpen, setFixtureOpen]     = useState(false);
+  const [clearOpen, setClearOpen]         = useState(false);
   const [shareBlob, setShareBlob]   = useState(null);
   const [sharing, setSharing]       = useState(false);
 
@@ -3103,13 +3166,19 @@ function FriendsLeague() {
     setTeams(ts => ts.map(x => x.id !== teamId ? x : { ...x, players: x.players.map(p => p.id === playerId ? { ...p, img } : p) }));
   };
 
-  // ล้างแค่ข้อมูลลีก (ทีม/นัด) — บัญชีผู้ใช้ยังอยู่
-  const resetAll = () => {
-    if (!confirm("ล้างทีม นักเตะ และผลการแข่งทั้งหมด แล้วกลับไปใช้ข้อมูลตัวอย่าง? (บัญชีผู้ใช้ไม่ถูกลบ)" +
-      (CLOUD ? "\n\n⚠️ เป็นข้อมูลออนไลน์ — ทุกคนจะเห็นข้อมูลที่รีเซ็ตแล้ว" : ""))) return;
-    if (!CLOUD) { localStorage.removeItem("fl_teams"); localStorage.removeItem("fl_matches"); }
-    setTeams(SEED_TEAMS);
-    setMatches(SEED_MATCHES);
+  // แอดมิน: ล้างข้อมูลทีละหมวด (เลือกในหน้าต่างล้างข้อมูล) · หมวดที่ไม่ได้เลือกไม่ถูกแตะ · บัญชีผู้ใช้ไม่ถูกลบ
+  const clearData = o => {
+    if (!isAdmin) return;
+    if (o.teams) {
+      setTeams([]);
+      setMatches([]);
+      setUsers(us => us.map(u => u.teamId ? { ...u, teamId: null } : u));   // ผู้จัดการทีมยังอยู่ แต่ไม่มีทีมแล้ว
+    } else {
+      if (o.matches) setMatches([]);
+      else if (o.results) setMatches(ms => ms.map(unplayed));
+      if (o.squads) setTeams(ts => ts.map(clearSquad));
+    }
+    setClearOpen(false);
   };
 
   // CLOUD: ย้ายข้อมูลที่กรอกไว้ในเบราว์เซอร์นี้ (ทีม นักเตะ นัด รูปการ์ด) ขึ้นออนไลน์ — แทนที่ข้อมูลออนไลน์เดิม
@@ -3283,12 +3352,12 @@ function FriendsLeague() {
           <div className="fl-enter">
             <SectionTitle icon="sparkles" kicker="Season 1 · Overview" title="ภาพรวมลีก" />
 
-            {CLOUD && teams.length === 0 && (
+            {teams.length === 0 && (
               <Card className="mb-8 p-6 text-center">
-                <div className="font-display text-lg font-bold italic text-ink">ลีกออนไลน์ยังไม่มีข้อมูล</div>
+                <div className="font-display text-lg font-bold italic text-ink">{CLOUD ? "ลีกออนไลน์ยังไม่มีข้อมูล" : "ลีกยังไม่มีข้อมูล"}</div>
                 {isAdmin ? (
                   <>
-                    <p className="mt-2 text-sm leading-relaxed text-muted">เริ่มจากข้อมูลที่เคยกรอกไว้ในเครื่องนี้ ใช้ข้อมูลตัวอย่าง หรือสร้างทีมเองที่แท็บ “ทีมทั้งหมด”</p>
+                    <p className="mt-2 text-sm leading-relaxed text-muted">{localLeague ? "เริ่มจากข้อมูลที่เคยกรอกไว้ในเครื่องนี้ ใช้ข้อมูลตัวอย่าง" : "ใช้ข้อมูลตัวอย่าง"} หรือสร้างทีมเองที่แท็บ “ทีมทั้งหมด”</p>
                     <div className="mt-4 flex flex-wrap justify-center gap-2">
                       {localLeague && (
                         <Btn variant="primary" onClick={moveLocalUp}>
@@ -3495,8 +3564,8 @@ function FriendsLeague() {
           )}
         </div>
         {isAdmin && (
-          <button onClick={resetAll} className="mt-3 text-[11px] text-muted hover:text-loss">
-            รีเซ็ตข้อมูลลีกทั้งหมด
+          <button onClick={() => setClearOpen(true)} className="mt-3 text-[11px] text-muted hover:text-loss">
+            ล้างข้อมูล (เลือกเป็นหมวด)…
           </button>
         )}
       </footer>
@@ -3518,6 +3587,10 @@ function FriendsLeague() {
           onMyTeam={() => { setShowAccount(false); setTab("myteam"); }} />
       )}
       {editMatch && <ResultModal match={editMatch} teams={teams} onClose={() => setEditMatch(null)} onSave={saveResult} />}
+      {clearOpen && isAdmin && (
+        <ClearDataModal counts={{ done: done.length, matches: matches.length, teams: teams.length }} cloud={CLOUD}
+          onClose={() => setClearOpen(false)} onExport={exportData} onClear={clearData} />
+      )}
       {teamModal && (
         <TeamModal team={teamModal.id ? teamModal : null} users={users} onClose={() => setTeamModal(null)} onSave={saveTeam} onDelete={deleteTeam}
           onSquad={t => { setTeamModal(null); setSquadTeamId(t.id); }} />
