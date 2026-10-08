@@ -43,6 +43,11 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
 }
+/* แอปบนมือถือ (เปิดจากหน้าจอโฮมของ iPhone): เว้นที่ให้แถบสถานะ รอยบาก และแถบโฮม · เครื่องอื่นค่าเป็น 0 = หน้าตาเหมือนเดิม */
+body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+header.fl-safe { padding-top: env(safe-area-inset-top); }
+footer.fl-safe { padding-bottom: calc(1.75rem + env(safe-area-inset-bottom)); }
+div.fl-scrim { padding-top: max(1rem, env(safe-area-inset-top)); padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
 /* น้ำเงินสดไล่สีจากด้านบน + แสงฟ้ามุมขวาบน แบบโปสเตอร์ eFootball 2022 (fixed ไม่เลื่อนตาม) */
 body::before {
   content: "";
@@ -61,7 +66,8 @@ body::before {
    พุ่งออกจากขอบตอนเปิด → ขยับเข้าออกเบา ๆ + บางชิ้นกะพริบแบบฟ้าแลบ · สีเหลืองทึบ (ไม่หรี่ → ไม่เป็นสีขุ่น)
    ตัวหนังสือบนพื้นใช้ .ef-halo ให้อ่านง่าย */
 .ef-stripes { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.ef-stripes svg { position: absolute; top: 110px; width: clamp(16px, calc(50vw - 576px), 10vw); height: calc(100% - 110px); overflow: visible; }   /* เริ่มใต้แถบเมนู */
+.ef-stripes svg { position: absolute; top: calc(110px + env(safe-area-inset-top)); width: clamp(16px, calc(50vw - 576px), 10vw);
+  height: calc(100% - 110px - env(safe-area-inset-top)); overflow: visible; }   /* เริ่มใต้แถบเมนู */
 .ef-stripes .fl { left: 0; }
 .ef-stripes .fr { right: 0; }
 .ef-stripes .s { fill: rgb(var(--stripe)); }

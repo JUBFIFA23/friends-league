@@ -44,7 +44,10 @@ const P = {
   external:'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   mail:'<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
-  copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>'
+  copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  phone:'<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
+  iosShare:'<path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M8 11H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-2"/>',
+  dots:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'
 };
 
 const Ic = ({ n, size = 16, className = "" }) => (
@@ -2648,6 +2651,56 @@ function PlayersTab({ stats, matches, teams, imageSetter }) {
   );
 }
 
+/* ══════════════════════════ INSTALL (ติดตั้งเป็นแอปบนมือถือ · PWA) ══════════════════════════ */
+const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+// เปิดจากไอคอนบนหน้าจอโฮมอยู่แล้ว → ไม่ต้องชวนติดตั้ง
+const IS_APP = (!!window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+
+const InstallSteps = ({ icon, title, steps }) => (
+  <div className="rounded-xl bg-sunken p-4 ring-1 ring-line/15">
+    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-ink"><Ic n={icon} size={15} className="text-accent" /> {title}</div>
+    <ol className="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-soft">
+      {steps.map((s, i) => <li key={i}>{s}</li>)}
+    </ol>
+  </div>
+);
+
+// prompt = สัญญาณติดตั้งของ Chrome/Android (มี = กดติดตั้งได้ในปุ่มเดียว ใช้ได้ครั้งเดียว) · iPhone ต้องเพิ่มเองผ่านปุ่มแชร์ของ Safari
+function InstallModal({ prompt, onUsed, onClose }) {
+  const install = async () => {
+    try { prompt.prompt(); await prompt.userChoice; } catch (e) {}
+    onUsed();
+    onClose();
+  };
+  const ios = (
+    <InstallSteps key="ios" icon="iosShare" title="iPhone / iPad (Safari)" steps={[
+      "เปิดเว็บนี้ด้วย Safari",
+      <>กดปุ่มแชร์ <Ic n="iosShare" size={14} className="inline align-[-2px] text-accent" /> ที่แถบล่างของ Safari</>,
+      "เลื่อนลงแล้วเลือก “เพิ่มไปยังหน้าจอโฮม” → กด “เพิ่ม”",
+    ]} />
+  );
+  const android = (
+    <InstallSteps key="android" icon="dots" title="Android (Chrome)" steps={[
+      <>กดเมนู <Ic n="dots" size={14} className="inline align-[-2px] text-accent" /> มุมขวาบน</>,
+      "เลือก “ติดตั้งแอป” หรือ “เพิ่มลงในหน้าจอหลัก”",
+    ]} />
+  );
+  return (
+    <Modal onClose={onClose}>
+      <ModalHead kicker="แอปบนมือถือ" title="ติดตั้ง Friends League" onClose={onClose} />
+      <div className="mb-5 flex items-center gap-4">
+        <img src="icons/icon-192.png" alt="" className="h-16 w-16 shrink-0 rounded-2xl shadow-lg ring-1 ring-white/15" />
+        <p className="text-sm leading-relaxed text-soft">เปิดจากไอคอนบนหน้าจอโฮมได้เลย เต็มจอเหมือนแอป โหลดเร็วขึ้น และเปิดดูข้อมูลล่าสุดได้แม้เน็ตหลุด · อัปเดตเองทุกครั้งที่เว็บอัปเดต</p>
+      </div>
+      {prompt && (
+        <Btn variant="primary" onClick={install} className="mb-5 w-full justify-center py-2.5"><Ic n="download" size={15} /> ติดตั้งแอปเลย</Btn>
+      )}
+      <div className="space-y-3">{IS_IOS ? [ios, android] : [android, ios]}</div>
+      <p className="mt-4 text-xs leading-relaxed text-muted">iPhone: แอปบนหน้าจอโฮมเก็บการล็อกอินแยกจาก Safari — เปิดแอปครั้งแรกให้ล็อกอินอีกครั้ง</p>
+    </Modal>
+  );
+}
+
 /* ══════════════════════════ CLEAR DATA (แอดมิน: ล้างข้อมูลทีละหมวด) ══════════════════════════ */
 // นัดที่แข่งแล้ว → กลับเป็นยังไม่แข่ง (คู่แข่ง สัปดาห์ วันเวลายังอยู่)
 const unplayed = ({ perf, motm, formations, ...m }) => ({ ...m, hs: null, as: null, status: "scheduled", events: [] });
@@ -2728,6 +2781,19 @@ function FriendsLeague() {
   const [matchEdit, setMatchEdit]     = useState(null);   // {} = เพิ่มนัดใหม่ · match = แก้นัด
   const [fixtureOpen, setFixtureOpen]     = useState(false);
   const [clearOpen, setClearOpen]         = useState(false);
+  // แอปบนมือถือ (PWA): installEvt = สัญญาณติดตั้งของ Chrome/Android (index.html เก็บไว้ให้ตั้งแต่ก่อนแอปโหลด)
+  const [installOpen, setInstallOpen] = useState(false);
+  const [installEvt, setInstallEvt]   = useState(() => window.__flInstall || null);
+  const [installed, setInstalled]     = useState(() => IS_APP || !!window.__flInstalled);
+  const [installHint, setInstallHint] = useState(() => !load("fl_install_hint_off", false));
+  useEffect(() => {
+    const sync = () => { setInstallEvt(window.__flInstall || null); setInstalled(IS_APP || !!window.__flInstalled); };
+    window.addEventListener("fl-install", sync);
+    return () => window.removeEventListener("fl-install", sync);
+  }, []);
+  const hideInstallHint = () => { setInstallHint(false); save("fl_install_hint_off", true); };
+  // แถบชวนติดตั้งบนหน้าแรก: เฉพาะจอมือถือ/แท็บเล็ต
+  const touchScreen = !!window.matchMedia && matchMedia("(max-width: 768px), (pointer: coarse)").matches;
   const [shareBlob, setShareBlob]   = useState(null);
   const [sharing, setSharing]       = useState(false);
 
@@ -3265,7 +3331,7 @@ function FriendsLeague() {
     <div className="relative min-h-screen text-soft antialiased">
 
       {/* ═══ HEADER ═══ */}
-      <header className="sticky top-0 z-40 bg-page/85 backdrop-blur-xl">
+      <header className="fl-safe sticky top-0 z-40 bg-page/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <div className="ef-btn ef-brand grid h-10 w-12 shrink-0 place-items-center">
@@ -3351,6 +3417,19 @@ function FriendsLeague() {
         {tab === "home" && (
           <div className="fl-enter">
             <SectionTitle icon="sparkles" kicker="Season 1 · Overview" title="ภาพรวมลีก" />
+
+            {!installed && installHint && touchScreen && (
+              <div className="mb-6 flex items-center gap-3 rounded-xl bg-sunken/90 p-3 ring-1 ring-accent/25">
+                <img src="icons/icon-192.png" alt="" className="h-10 w-10 shrink-0 rounded-xl" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-ink">ติดตั้งเป็นแอปบนมือถือ</div>
+                  <div className="text-xs text-muted">เปิดจากหน้าจอโฮม เต็มจอ โหลดเร็วขึ้น</div>
+                </div>
+                <Btn variant="primary" onClick={() => setInstallOpen(true)} className="shrink-0 px-3 py-1.5 text-xs">วิธีติดตั้ง</Btn>
+                <button type="button" onClick={hideInstallHint} aria-label="ซ่อนแถบติดตั้งแอป"
+                  className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-line/10 hover:text-ink"><Ic n="x" size={16} /></button>
+              </div>
+            )}
 
             {teams.length === 0 && (
               <Card className="mb-8 p-6 text-center">
@@ -3548,13 +3627,14 @@ function FriendsLeague() {
       </main>
 
       {/* ═══ FOOTER ═══ */}
-      <footer className="ef-halo relative border-t border-line/10 px-5 py-7 text-center text-xs text-muted">
+      <footer className="fl-safe ef-halo relative border-t border-line/10 px-5 py-7 text-center text-xs text-muted">
         <div>Friends League · eFootball 2027 Mobile · บันทึกผลด้วยมือ (ไม่เชื่อมต่อ Konami API)</div>
         <div className="mt-1">{CLOUD ? "ข้อมูลออนไลน์ · ทุกเครื่องเห็นข้อมูลเดียวกัน" : "โหมดเครื่องเดียว · ข้อมูลอยู่ในเบราว์เซอร์นี้เท่านั้น (ตั้งค่า Firebase เพื่อใช้ร่วมกันทุกเครื่อง)"}</div>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
           {CLOUD && isAdmin && localLeague && !moved && teams.length > 0 && (
             <Btn onClick={moveLocalUp}><Ic n="upload" size={13} /> ย้ายข้อมูลจากเครื่องนี้ขึ้นออนไลน์</Btn>
           )}
+          {!installed && <Btn onClick={() => setInstallOpen(true)}><Ic n="phone" size={13} /> ติดตั้งเป็นแอป</Btn>}
           <Btn onClick={exportData}><Ic n="download" size={13} /> Export JSON</Btn>
           {isAdmin && (
             <label className="ef-btn ef-btn-ghost inline-flex cursor-pointer items-center gap-2 px-5 py-2 text-sm">
@@ -3587,6 +3667,10 @@ function FriendsLeague() {
           onMyTeam={() => { setShowAccount(false); setTab("myteam"); }} />
       )}
       {editMatch && <ResultModal match={editMatch} teams={teams} onClose={() => setEditMatch(null)} onSave={saveResult} />}
+      {installOpen && (
+        <InstallModal prompt={installEvt} onClose={() => setInstallOpen(false)}
+          onUsed={() => { window.__flInstall = null; setInstallEvt(null); }} />
+      )}
       {clearOpen && isAdmin && (
         <ClearDataModal counts={{ done: done.length, matches: matches.length, teams: teams.length }} cloud={CLOUD}
           onClose={() => setClearOpen(false)} onExport={exportData} onClear={clearData} />
