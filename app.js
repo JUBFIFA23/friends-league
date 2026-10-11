@@ -614,8 +614,8 @@ const ImgDB = {
   del(ids) { return this.run("readwrite", s => { ids.forEach(id => s.delete(id)); }); },
 };
 
-// ย่อรูปที่อัปโหลด → dataURL (JPEG ไม่มีความโปร่งใส → เติมพื้นสีน้ำเงินเข้มก่อน)
-async function makeCardImage(file) {
+// เปิดไฟล์รูปที่ผู้ใช้เลือก → วาดลง canvas ขนาด w×h (ย่อตาม scale ที่ได้จากขนาดจริงของรูป)
+async function drawUpload(file, scaleOf) {
   if (!file || !/^image\//.test(file.type)) throw new Error("ไฟล์นี้ไม่ใช่รูปภาพ");
   if (file.size > 20 * 1024 * 1024) throw new Error("รูปใหญ่เกิน 20MB");
   const url = URL.createObjectURL(file);
@@ -626,15 +626,30 @@ async function makeCardImage(file) {
       i.onerror = () => rej(new Error("เปิดรูปนี้ไม่ได้"));
       i.src = url;
     });
-    const scale = Math.min(1, CARD_W / img.naturalWidth, CARD_H_MAX / img.naturalHeight);
+    const scale = scaleOf(img.naturalWidth, img.naturalHeight);
     const w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
     const c = document.createElement("canvas");
     c.width = w; c.height = h;
-    const g = c.getContext("2d");
-    g.fillStyle = "#0B1C4A"; g.fillRect(0, 0, w, h);
-    g.drawImage(img, 0, 0, w, h);
-    return c.toDataURL("image/jpeg", 0.75);
+    return { c, g: c.getContext("2d"), img, w, h };
   } finally { URL.revokeObjectURL(url); }
+}
+// การ์ดนักเตะ → JPEG (ไม่มีความโปร่งใส → เติมพื้นสีน้ำเงินเข้มก่อน)
+async function makeCardImage(file) {
+  const { c, g, img, w, h } = await drawUpload(file, (W, H) => Math.min(1, CARD_W / W, CARD_H_MAX / H));
+  g.fillStyle = "#0B1C4A"; g.fillRect(0, 0, w, h);
+  g.drawImage(img, 0, 0, w, h);
+  return c.toDataURL("image/jpeg", 0.75);
+}
+// โลโก้ทีม → ด้านยาวสุด 240px แบบ PNG (เก็บพื้นใสไว้) · ไฟล์ยังใหญ่เกิน → JPEG พื้นน้ำเงินเข้ม
+const LOGO_MAX = 240;
+async function makeLogoImage(file) {
+  const { c, g, img, w, h } = await drawUpload(file, (W, H) => Math.min(1, LOGO_MAX / Math.max(W, H)));
+  g.drawImage(img, 0, 0, w, h);
+  const png = c.toDataURL("image/png");
+  if (png.length < 300000) return png;
+  g.globalCompositeOperation = "destination-over";
+  g.fillStyle = "#0B1C4A"; g.fillRect(0, 0, w, h);
+  return c.toDataURL("image/jpeg", 0.85);
 }
 const imageId = data => "c" + sha256(data).slice(0, 24);
 
@@ -943,25 +958,127 @@ function Tilt({ children, className = "", ...p }) {
   );
 }
 
-// ตราทีม: โล่สีทีม + อักษรย่อ (แทนเลขเสื้อ)
+/* ตราทีม: team.crest = { short: ชื่อย่อ (ไม่เกิน 4 ตัว · ว่าง = อักษรแรกของชื่อทีม), pattern: ลาย, color2: สีที่สอง, logo: id รูปโลโก้ }
+   สีหลัก = team.kit · มีรูปโลโก้ → แสดงรูปแทนโล่ที่ออกแบบ (รูปเก็บแบบเดียวกับรูปการ์ด) */
+const CREST_PATTERNS = [["plain", "เรียบ"], ["stripes", "ลายตั้ง"], ["hoops", "ลายขวาง"], ["sash", "แถบเฉียง"], ["halves", "ครึ่งซีก"], ["band", "แถบกลาง"]];
+const CREST_KEYS = CREST_PATTERNS.map(([k]) => k);
+const SHIELD = "M50 3 L94 16 V54 C94 82 74 102 50 113 C26 102 6 82 6 54 V16 Z";
+const crestOf = t => t && t.crest && typeof t.crest === "object" ? t.crest : {};
+const crestText = t => {
+  const s = [...(crestOf(t).short || "").trim()].slice(0, 4).join("");
+  return s ? s.toUpperCase() : initials(t.name);
+};
+// บันทึกเฉพาะค่าที่ถูกรูปแบบ · ไม่ได้แต่งอะไรเลย = ไม่เก็บ (ใช้ตราตั้งต้น)
+const cleanCrest = c => {
+  const out = {
+    short: [...String((c && c.short) || "").trim()].slice(0, 4).join(""),
+    pattern: c && CREST_KEYS.includes(c.pattern) ? c.pattern : "plain",
+    color2: c && hexOk(c.color2) ? c.color2 : "#FFFFFF",
+    logo: c && IMG_ID_RE.test(c.logo || "") ? c.logo : "",
+  };
+  return out.short || out.pattern !== "plain" || out.logo ? out : undefined;
+};
+// ทุกรูปที่ทีมนี้ใช้ (การ์ดนักเตะ + โลโก้ทีม) → ใช้ตอนโหลด/เก็บ/Export รูป
+const teamImageIds = t => (t.players || []).map(p => p.img).concat(crestOf(t).logo || []).filter(Boolean);
+
 function Crest({ team, className = "" }) {
+  const { images } = useContext(ImgContext);
   const gid = useMemo(() => "cg" + Math.random().toString(36).slice(2, 9), []);
-  const kit = hexOk(team.kit) ? team.kit : "#2F78FF";
-  const ink = isLight(kit) ? "#0B1C4A" : "#FFFFFF";
-  const text = initials(team.name);
-  return (
-    <svg viewBox="0 0 100 116" className={className} role="img" aria-label={"ตราทีม " + team.name}>
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={kit} />
-          <stop offset="1" stopColor={kit} stopOpacity=".72" />
-        </linearGradient>
-      </defs>
-      <path d="M50 3 L94 16 V54 C94 82 74 102 50 113 C26 102 6 82 6 54 V16 Z" fill={"url(#" + gid + ")"} stroke="rgba(255,255,255,.6)" strokeWidth="3" />
-      <path d="M50 13 L85 23 V54 C85 76 70 92 50 102 C30 92 15 76 15 54 V23 Z" fill="none" stroke={isLight(kit) ? "rgba(11,28,74,.25)" : "rgba(255,255,255,.28)"} strokeWidth="1.5" />
-      <text x="50" y="68" textAnchor="middle" fontFamily="Kanit, 'Noto Sans Thai', sans-serif" fontWeight="700" fontStyle="italic"
-        fontSize={text.length > 1 ? 34 : 42} fill={ink}>{text}</text>
+  const c = crestOf(team);
+  const label = "ตราทีม " + (team.name || "");
+  const logo = c.logo && images[c.logo];
+  if (logo) return (
+    <svg viewBox="0 0 100 116" className={className} role="img" aria-label={label}>
+      <image href={logo} x="0" y="0" width="100" height="116" preserveAspectRatio="xMidYMid meet" />
     </svg>
+  );
+  const kit = hexOk(team.kit) ? team.kit : "#2F78FF";
+  const c2 = hexOk(c.color2) ? c.color2 : "#FFFFFF";
+  const pattern = CREST_KEYS.includes(c.pattern) ? c.pattern : "plain";
+  const light = isLight(kit), ink = light ? "#0B1C4A" : "#FFFFFF";
+  const text = crestText(team), len = [...text].length;
+  return (
+    <svg viewBox="0 0 100 116" className={className} role="img" aria-label={label}>
+      <defs>
+        <linearGradient id={gid + "s"} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#000" stopOpacity="0" />
+          <stop offset="1" stopColor="#000" stopOpacity=".3" />
+        </linearGradient>
+        <clipPath id={gid + "c"}><path d={SHIELD} /></clipPath>
+      </defs>
+      <g clipPath={"url(#" + gid + "c)"}>
+        <rect width="100" height="116" fill={kit} />
+        {pattern === "stripes" && [1, 3, 5].map(i => <rect key={i} x={i * 100 / 7} y="0" width={100 / 7} height="116" fill={c2} />)}
+        {pattern === "hoops" && [1, 3, 5].map(i => <rect key={i} x="0" y={i * 116 / 7} width="100" height={116 / 7} fill={c2} />)}
+        {pattern === "sash" && <rect x="-30" y="46" width="160" height="24" fill={c2} transform="rotate(42 50 58)" />}
+        {pattern === "halves" && <rect x="50" y="0" width="50" height="116" fill={c2} />}
+        {pattern === "band" && <rect x="37" y="0" width="26" height="116" fill={c2} />}
+        <rect width="100" height="116" fill={"url(#" + gid + "s)"} />
+      </g>
+      <path d={SHIELD} fill="none" stroke="rgba(255,255,255,.6)" strokeWidth="3" />
+      <path d="M50 13 L85 23 V54 C85 76 70 92 50 102 C30 92 15 76 15 54 V23 Z" fill="none" stroke={light ? "rgba(11,28,74,.25)" : "rgba(255,255,255,.28)"} strokeWidth="1.5" />
+      <text x="50" y={len > 2 ? 65 : 68} textAnchor="middle" fontFamily="Kanit, 'Noto Sans Thai', sans-serif" fontWeight="700" fontStyle="italic"
+        fontSize={[42, 42, 34, 27, 21][Math.min(4, len)]} fill={ink}
+        stroke={pattern === "plain" ? "none" : light ? "rgba(255,255,255,.7)" : "rgba(11,28,74,.6)"} strokeWidth="4" strokeLinejoin="round" paintOrder="stroke">{text}</text>
+    </svg>
+  );
+}
+
+// แต่งตราทีม (แอดมิน / ผู้จัดการทีมนั้น): ชื่อย่อ · ลาย + สีที่สอง · หรืออัปโหลดรูปโลโก้
+// team = ชื่อ + สีหลักที่กำลังแก้ (ไว้ให้ตัวอย่างตรงกับของจริง) · crest = ค่าที่กำลังแก้ (ยังไม่บันทึก)
+function CrestEditor({ team, crest, onChange }) {
+  const { images, putImage } = useContext(ImgContext);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const c = crest || {};
+  const set = patch => onChange({ ...c, ...patch });
+  const pattern = CREST_KEYS.includes(c.pattern) ? c.pattern : "plain";
+  const auto = initials(team.name || "?");
+  const upload = async file => {
+    setErr(""); setBusy(true);
+    try { set({ logo: await putImage(await makeLogoImage(file)) }); }
+    catch (e) { setErr(e.message || "อัปโหลดรูปไม่สำเร็จ"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="space-y-3 rounded-xl bg-sunken p-3 ring-1 ring-line/15">
+      <div className="text-sm font-medium text-ink">แต่งตราทีม</div>
+      <Field label="ชื่อย่อบนตรา" hint={"ไม่เกิน 4 ตัว · เว้นว่าง = " + auto + " (จากชื่อทีม)"}>
+        <input value={c.short || ""} onChange={e => set({ short: [...e.target.value].slice(0, 4).join("") })} placeholder={auto}
+          autoCapitalize="characters" spellCheck={false} className={INPUT} />
+      </Field>
+      <div>
+        <span className={LABEL + " mb-1.5 block"}>ลายบนโล่</span>
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+          {CREST_PATTERNS.map(([k, label]) => (
+            <button key={k} type="button" onClick={() => set({ pattern: k })} aria-pressed={pattern === k} aria-label={"ลายโล่: " + label}
+              className={"rounded-lg px-1 py-1.5 ring-1 transition " + (pattern === k ? "bg-accent/15 ring-accent" : "ring-line/20 hover:ring-line/40")}>
+              <Crest team={{ name: team.name, kit: team.kit, crest: { ...c, pattern: k, logo: "" } }} className="mx-auto h-9 w-auto" />
+              <span className="mt-1 block text-[10px] text-muted">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {pattern !== "plain" && (
+        <Field label="สีที่สอง">
+          <input type="color" value={hexOk(c.color2) ? c.color2 : "#FFFFFF"} onChange={e => set({ color2: e.target.value })} className="h-[42px] w-full rounded-lg" />
+        </Field>
+      )}
+      <div>
+        <span className={LABEL + " mb-1.5 block"}>หรือใช้รูปโลโก้ของทีม</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className={"ef-btn ef-btn-ghost inline-flex cursor-pointer items-center gap-2 px-4 py-2 text-sm " + (busy ? "pointer-events-none opacity-60" : "")}>
+            <Ic n="upload" size={14} /> {busy ? "กำลังอัปโหลด…" : c.logo ? "เปลี่ยนรูปโลโก้" : "อัปโหลดรูปโลโก้"}
+            <input type="file" accept="image/*" className="hidden" aria-label="อัปโหลดรูปโลโก้ทีม"
+              onChange={e => { const f = e.target.files[0]; e.target.value = ""; if (f) upload(f); }} />
+          </label>
+          {c.logo && <Btn onClick={() => set({ logo: "" })}><Ic n="trash" size={14} /> ลบรูปโลโก้</Btn>}
+          {c.logo && !images[c.logo] && <span className="text-xs text-muted">กำลังโหลดรูป…</span>}
+        </div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-muted">มีรูปโลโก้ = แสดงรูปแทนโล่ที่แต่งไว้ · รูปพื้นใส (PNG) สวยที่สุด</p>
+        {err && <div className="mt-2"><Note>{err}</Note></div>}
+      </div>
+    </div>
   );
 }
 
@@ -1335,7 +1452,7 @@ function TeamModal({ team, users, onClose, onSave, onDelete, onSquad }) {
   const submit = () => {
     if (!(f.name || "").trim()) return setErr("กรอกชื่อทีม");
     const m = managers.find(u => String(u.id) === mgr);
-    onSave({ ...f, name: f.name.trim().slice(0, 24) }, m ? m.id : null);
+    onSave({ ...f, name: f.name.trim().slice(0, 24), crest: cleanCrest(f.crest) }, m ? m.id : null);
   };
 
   return (
@@ -1348,6 +1465,7 @@ function TeamModal({ team, users, onClose, onSave, onDelete, onSquad }) {
           <Field label="สโมสรที่ใช้ในเกม"><input value={f.club} onChange={e => set("club", e.target.value)} placeholder="เช่น Manchester City" className={INPUT} /></Field>
           <Field label="สีทีม"><input type="color" value={hexOk(f.kit) ? f.kit : "#2F78FF"} onChange={e => set("kit", e.target.value)} className="h-[42px] w-full rounded-lg" /></Field>
         </div>
+        <CrestEditor team={{ name: f.name || "?", kit: f.kit }} crest={crestOf(f)} onChange={v => set("crest", v)} />
         <Field label="ชื่อเจ้าของทีม (แสดงบนการ์ด)"><input value={f.owner} onChange={e => set("owner", e.target.value)} placeholder="เช่น นนท์" className={INPUT} /></Field>
         <Field label="บัญชีผู้จัดการทีม (User)" hint="ผู้จัดการแก้ชื่อทีม สีทีม และรายชื่อนักเตะได้เอง · สร้างบัญชีได้ที่เมนูบัญชี › จัดการผู้ใช้">
           <select value={mgr} onChange={e => setMgr(e.target.value)} className={INPUT}>
@@ -1376,26 +1494,28 @@ function TeamModal({ team, users, onClose, onSave, onDelete, onSquad }) {
   );
 }
 
-/* ══════════════════════════ TEAM IDENTITY (ผู้จัดการ: ชื่อทีม + สีทีม) ══════════════════════════ */
+/* ══════════════════════════ TEAM IDENTITY (ผู้จัดการ: ชื่อทีม + สีทีม + ตราทีม) ══════════════════════════ */
 function TeamIdentity({ team, onSave }) {
   const [name, setName] = useState(team.name);
   const [kit, setKit] = useState(hexOk(team.kit) ? team.kit : "#2F78FF");
+  const [crest, setCrest] = useState(crestOf(team));
   const [msg, setMsg] = useState(null);
-  useEffect(() => { setName(team.name); setKit(hexOk(team.kit) ? team.kit : "#2F78FF"); }, [team.id]);
+  useEffect(() => { setName(team.name); setKit(hexOk(team.kit) ? team.kit : "#2F78FF"); setCrest(crestOf(team)); }, [team.id]);
   const submit = e => {
     e.preventDefault();
     if (!name.trim()) return setMsg({ kind: "error", text: "กรอกชื่อทีม" });
-    onSave({ name: name.trim().slice(0, 24), kit });
-    setMsg({ kind: "ok", text: "บันทึกชื่อและสีทีมแล้ว" });
+    onSave({ name: name.trim().slice(0, 24), kit, crest: cleanCrest(crest) });
+    setMsg({ kind: "ok", text: "บันทึกชื่อ สี และตราทีมแล้ว" });
   };
   return (
     <form onSubmit={submit} noValidate className="space-y-3">
-      <div className="flex justify-center pb-1"><Crest team={{ ...team, name: name || "?", kit }} className="h-28 w-auto drop-shadow-[0_10px_18px_rgba(0,0,0,0.5)]" /></div>
+      <div className="flex justify-center pb-1"><Crest team={{ ...team, name: name || "?", kit, crest }} className="h-28 w-auto drop-shadow-[0_10px_18px_rgba(0,0,0,0.5)]" /></div>
       <Field label="ชื่อทีม"><input value={name} onChange={e => { setName(e.target.value); setMsg(null); }} maxLength={24} className={INPUT} /></Field>
-      <Field label="สีทีม"><input type="color" value={kit} onChange={e => { setKit(e.target.value); setMsg(null); }} className="h-[42px] w-full rounded-lg" /></Field>
+      <Field label="สีทีม (สีหลักของตรา)"><input type="color" value={kit} onChange={e => { setKit(e.target.value); setMsg(null); }} className="h-[42px] w-full rounded-lg" /></Field>
+      <CrestEditor team={{ name: name || "?", kit }} crest={crest} onChange={v => { setCrest(v); setMsg(null); }} />
       <p className="text-xs leading-relaxed text-muted">สโมสรในเกม: <span className="text-soft">{team.club || "—"}</span> · แอดมินเป็นคนตั้ง</p>
       {msg && <Note kind={msg.kind}>{msg.text}</Note>}
-      <Btn type="submit" variant="primary" className="w-full justify-center"><Ic n="check" size={15} /> บันทึกชื่อและสี</Btn>
+      <Btn type="submit" variant="primary" className="w-full justify-center"><Ic n="check" size={15} /> บันทึกชื่อ สี และตรา</Btn>
     </form>
   );
 }
@@ -2593,6 +2713,10 @@ function PlayersTab({ stats, matches, teams, imageSetter }) {
   const [sort, setSort] = useState("G");
   const rows = useMemo(() => stats.filter(PLAYER_SORTS[sort].keep).sort(PLAYER_SORTS[sort].fn), [stats, sort]);
   const hi = k => k === sort ? "text-accent" : "";
+  // ช่องของหมวดที่เลือกอยู่ (ดาวซัลโว / แอสซิสต์ / MOTM) = ตัวเลขเหลืองเด่น · ช่องอื่นตัวธรรมดา
+  const stat = (k, v) => k === sort
+    ? <div className="text-center font-display text-lg font-bold italic"><Hl>{v}</Hl></div>
+    : <div className="text-center text-soft">{v}</div>;
   // กดแถว → หน้าข้อมูลนักเตะ (หาจาก stats ทุกครั้ง → ข้อมูลล่าสุดเสมอ)
   // อดีตนักเตะ / ข้อมูลเก่าที่มีแค่ชื่อ → ใช้ข้อมูลจากสถิติแทน (ใส่รูปไม่ได้)
   const [openKey, setOpenKey] = useState(null);
@@ -2633,9 +2757,9 @@ function PlayersTab({ stats, matches, teams, imageSetter }) {
                 </div>
               </div>
               <div className="text-center text-soft">{s.apps}</div>
-              <div className="text-center font-display text-lg font-bold italic"><Hl>{s.G}</Hl></div>
-              <div className="text-center text-soft">{s.A}</div>
-              <div className="text-center text-soft">{s.motm || "–"}</div>
+              {stat("G", s.G)}
+              {stat("A", s.A)}
+              {stat("motm", s.motm || "–")}
               <div className="text-center text-muted">{s.Y || "–"}</div>
               <div className="text-center text-muted">{s.R || "–"}</div>
             </div>
@@ -2808,7 +2932,7 @@ function FriendsLeague() {
     imgBoot.current = ImgDB.all().then(m => {
       if (!CLOUD) {
         const used = new Set();
-        teams.forEach(t => (t.players || []).forEach(p => { if (p.img) used.add(p.img); }));
+        teams.forEach(t => teamImageIds(t).forEach(id => used.add(id)));
         const orphan = Object.keys(m).filter(id => !used.has(id));
         if (orphan.length) ImgDB.del(orphan).catch(() => {});
         orphan.forEach(id => { delete m[id]; });
@@ -2852,16 +2976,15 @@ function FriendsLeague() {
   // รูปที่นักเตะในข้อมูลชุดนี้ใช้อยู่ → แนบไปกับไฟล์ Export
   const usedImages = teamList => {
     const out = {};
-    teamList.forEach(t => (t.players || []).forEach(p => { if (p.img && imagesRef.current[p.img]) out[p.img] = imagesRef.current[p.img]; }));
+    teamList.forEach(t => teamImageIds(t).forEach(id => { if (imagesRef.current[id]) out[id] = imagesRef.current[id]; }));
     return out;
   };
   // CLOUD: ทีมอ้างรูปที่เครื่องนี้ยังไม่มี → ดึงจาก Firestore ทีละรูป (ครั้งเดียว แล้วเก็บแคชไว้ในเครื่อง)
   const askedImg = useRef(new Set());
   useEffect(() => {
     if (!CLOUD || !Cloud.db || !imgBoot.current) return;
-    imgBoot.current.then(() => teams.forEach(t => (t.players || []).forEach(p => {
-      const id = p.img;
-      if (!id || imagesRef.current[id] || askedImg.current.has(id) || !IMG_ID_RE.test(id)) return;
+    imgBoot.current.then(() => teams.forEach(t => teamImageIds(t).forEach(id => {
+      if (imagesRef.current[id] || askedImg.current.has(id) || !IMG_ID_RE.test(id)) return;
       askedImg.current.add(id);
       Cloud.db.collection("images").doc(id).get()
         .then(s => { if (s.exists) absorbImages({ [id]: (s.data() || {}).data }); })
@@ -3198,7 +3321,7 @@ function FriendsLeague() {
   // แอดมิน: สร้าง/แก้ทีม (ชื่อ เจ้าของ สโมสร สี) + ผูกบัญชีผู้จัดการทีม
   const saveTeam = (f, managerId) => {
     const id = f.id || uniqueId();
-    const info = { name: f.name, owner: f.owner, club: f.club, kit: f.kit };
+    const info = { name: f.name, owner: f.owner, club: f.club, kit: f.kit, crest: f.crest };
     setTeams(ts => f.id ? ts.map(t => t.id === id ? withSquad({ ...t, ...info }) : t) : [...ts, withSquad({ ...info, id })]);
     setUsers(us => managerId ? assignTeam(us, managerId, id)
       : us.map(u => u.role === "manager" && u.teamId === id ? { ...u, teamId: null } : u));
@@ -3217,7 +3340,7 @@ function FriendsLeague() {
   // ผู้จัดการทีมแก้ได้แค่ชื่อ/สีของทีมตัวเอง · แอดมินแก้ได้ทุกทีม
   const saveIdentity = (id, patch) => {
     if (!(isAdmin || (myTeam && myTeam.id === id))) return;
-    setTeams(ts => ts.map(t => t.id === id ? { ...t, name: patch.name, kit: patch.kit } : t));
+    setTeams(ts => ts.map(t => t.id === id ? { ...t, name: patch.name, kit: patch.kit, crest: patch.crest } : t));
   };
   // รายชื่อ + แผนการเล่น + ตำแหน่งตัวจริงในแผน (ผู้จัดการทีมของทีมนี้ หรือแอดมิน)
   const saveSquad = (id, players, formation, lineup) => {
@@ -3254,7 +3377,7 @@ function FriendsLeague() {
       + localLeague.teams.length + " ทีม · " + localLeague.matches.length + " นัด)?")) return;
     const all = await ImgDB.all().catch(() => ({}));
     const used = {};
-    localLeague.teams.forEach(t => t.players.forEach(p => { if (p.img && all[p.img]) used[p.img] = all[p.img]; }));
+    localLeague.teams.forEach(t => teamImageIds(t).forEach(id => { if (all[id]) used[id] = all[id]; }));
     absorbImages(used);
     uploadImages(used);
     setTeams(localLeague.teams);

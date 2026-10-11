@@ -47,7 +47,7 @@ service cloud.firestore {
         && getAfter(myDoc()).data.role == "manager"
         && getAfter(myDoc()).data.teamId == t.id
         && string(t.id) == teamId
-        && t.keys().hasOnly(["id", "name", "owner", "club", "kit", "players", "formation", "lineup"])
+        && t.keys().hasOnly(["id", "name", "owner", "club", "kit", "crest", "players", "formation", "lineup"])
         && t.name is string && t.name.size() > 0 && t.name.size() <= 24
         && t.players is list && t.players.size() <= 30;
     }
@@ -85,7 +85,7 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (role() == "manager"
             && get(myDoc()).data.teamId == resource.data.id
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "kit", "players", "formation", "lineup"]));
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "kit", "crest", "players", "formation", "lineup"]));
     }
 
     match /matches/{matchId} {
