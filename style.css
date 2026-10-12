@@ -305,6 +305,23 @@ input[type=color]::-webkit-color-swatch {
 }
 .fl-enter { animation: fl-fade-up .28s ease-out both; }
 
+/* ══════════════════ PODIUM (สถิตินักเตะ · 3 อันดับแรก) ══════════════════
+   แท่นไล่สีทอง/เงิน/ทองแดง ขอบมน (ขอบบนมีแสง ด้านล่างเข้ม) · ตัวเลขบนแท่นสีเข้ม (ผ่าน ≥7:1)
+   แสงสปอตไลต์ทองหลังอันดับ 1 + เส้นพื้นเวทีใต้แท่น (อยู่หลังแท่น) */
+.fl-podium { position: relative; isolation: isolate; }
+.fl-podium::before {
+  content: ""; position: absolute; z-index: -1; left: 50%; top: 0; width: min(64%, 400px); aspect-ratio: 1; transform: translate(-50%, -12%);
+  background: radial-gradient(closest-side, rgb(255 214 74 / .28), rgb(255 214 74 / .07) 60%, transparent); pointer-events: none;
+}
+.fl-podium::after {
+  content: ""; position: absolute; z-index: -1; left: 3%; right: 3%; bottom: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, rgb(var(--accent) / .75), transparent); pointer-events: none;
+}
+.fl-step { border-radius: 14px 14px 6px 6px; box-shadow: inset 0 1px 0 rgb(255 255 255 / .6), inset 0 -14px 20px -14px rgb(0 0 0 / .45), 0 16px 28px -18px rgb(0 0 0 / .9); }
+.fl-step-1 { background: linear-gradient(180deg, #FFEF8F 0%, #F7C928 42%, #D29A00 100%); color: #2A1C00; }
+.fl-step-2 { background: linear-gradient(180deg, #FFFFFF 0%, #D3DCEA 42%, #93A5C4 100%); color: #172033; }
+.fl-step-3 { background: linear-gradient(180deg, #FFD9B6 0%, #E0965A 42%, #A95A22 100%); color: #2A1204; }
+
 @media (prefers-reduced-motion: reduce) {
   *, .boot-ring { animation: none !important; transition: none !important; }
 }

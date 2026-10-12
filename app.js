@@ -2708,6 +2708,81 @@ const PLAYER_SORTS = {
   motm: { label: "MOTM",       fn: (a, b) => b.motm - a.motm || b.apps - a.apps || a.name.localeCompare(b.name), keep: s => s.motm > 0 },
 };
 
+/* ── โพเดียม 3 อันดับแรก (ใช้ทั้ง ดาวซัลโว / แอสซิสต์ / MOTM) ──
+   อันดับ 2 ซ้าย · 1 กลาง (การ์ดใหญ่สุด แท่นสูงสุด) · 3 ขวา · ฐานแท่นเสมอกัน · กดที่การ์ดหรือแท่น = ดูข้อมูลนักเตะ */
+const PODIUM_UNIT = { G: "ประตู", A: "แอสซิสต์", motm: "MOTM" };
+const PODIUM_LIFT = { 1: "pb-7 sm:pb-12", 2: "pb-4 sm:pb-7", 3: "pb-1.5 sm:pb-3" };   // แท่นสูงต่างกันด้วยระยะว่างด้านล่าง
+// เหรียญวาดเอง (อีโมจิแต่ละเครื่องหน้าตาไม่เหมือนกัน): ไล่สี [สว่าง, กลาง, เข้ม, สีตัวเลข] + ริบบิ้นแดง 2 หาง
+const MEDALS = { 1: ["#FFF3A6", "#F5C518", "#B8860B", "#3A2600"], 2: ["#FFFFFF", "#C9D3E3", "#7D8BA3", "#1E2738"], 3: ["#FFDDBF", "#D9884A", "#8A4A1C", "#2E1405"] };
+const Medal = ({ rank, className = "" }) => {
+  const [hi, mid, lo, ink] = MEDALS[rank], id = "fl-medal-" + rank;
+  return (
+    <svg viewBox="0 0 48 58" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={hi} /><stop offset=".55" stopColor={mid} /><stop offset="1" stopColor={lo} />
+        </linearGradient>
+      </defs>
+      <path d="M14 30 L7 54 L14 50 L19 56 L24 36 Z" fill="#B3122E" />
+      <path d="M34 30 L41 54 L34 50 L29 56 L24 36 Z" fill="#E03250" />
+      <circle cx="24" cy="22" r="19" fill={"url(#" + id + ")"} stroke={lo} strokeWidth="1.5" />
+      <circle cx="24" cy="22" r="14.5" fill="none" stroke="#fff" strokeOpacity=".55" strokeWidth="1.2" />
+      <text x="24" y="29.5" textAnchor="middle" fontFamily="Kanit, sans-serif" fontWeight="800" fontStyle="italic" fontSize="21" fill={ink}>{rank}</text>
+    </svg>
+  );
+};
+
+function PodiumSpot({ s, p, rank, sort, onOpen }) {
+  const cardW = rank === 1 ? "w-[84%] max-w-[156px]" : "w-[74%] max-w-[136px]";
+  const step = "fl-step fl-step-" + rank + " mt-3 w-full px-1.5 pt-1.5 sm:mt-4 sm:px-2 sm:pt-2 " + PODIUM_LIFT[rank];
+  if (!s) return (   // ยังไม่มีคนในอันดับนี้ → แท่นว่างจาง ๆ
+    <div className="flex min-w-0 flex-col items-center opacity-40" aria-hidden="true">
+      <div className={cardW + " aspect-[0.707] rounded-[8%] border-2 border-dashed border-line/30"} />
+      <div className={step}>
+        <div className="rounded-lg bg-sunken/90 px-2 py-2 text-center text-[11px] text-muted">ยังไม่มี</div>
+        <div className="mt-1.5 text-center font-display text-3xl font-bold italic leading-none sm:mt-2">–</div>
+      </div>
+    </div>
+  );
+  const v = s[sort] || 0, go = () => onOpen(s);
+  return (
+    <div role="button" tabIndex={0} onClick={go} aria-label={"ดูข้อมูลนักเตะ " + s.name + " · อันดับ " + rank + " · " + v + " " + PODIUM_UNIT[sort]}
+      onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); go(); } }}
+      className="flex min-w-0 cursor-pointer flex-col items-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      <div className={"relative " + cardW}>
+        <Tilt className={"fl-frame fl-tier-" + rank + " rounded-[9%] p-[3px] shadow-[0_18px_30px_-14px_rgb(0_0_0/0.9)]"}>
+          <PlayerCard p={p} pos={s.pos} kit={s.team && s.team.kit} />
+        </Tilt>
+        <Medal rank={rank} className={"absolute drop-shadow-[0_4px_6px_rgb(0_0_0/0.5)] " + (rank === 1 ? "-right-4 -top-4 w-11 sm:w-14" : "-right-3 -top-3 w-9 sm:w-12")} />
+      </div>
+      <div className={step}>
+        <div className="rounded-lg bg-sunken/90 px-1.5 py-1.5 text-left ring-1 ring-black/20 sm:px-2.5">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {s.pos && <span className="hidden shrink-0 sm:inline-flex"><PosBadge pos={s.pos} /></span>}   {/* จอแคบ: ตำแหน่งมีบนการ์ดแล้ว → ให้ที่ชื่อ */}
+            <span className="min-w-0 truncate text-xs font-semibold text-ink sm:text-sm">{s.name}{s.former && <span className="text-[10px] font-normal text-muted"> (อดีต)</span>}</span>
+            {!s.former && <span className="hidden shrink-0 sm:inline-flex"><CardBadge card={s.card} /></span>}
+          </div>
+          <div className="mt-0.5 truncate text-[10px] text-muted sm:text-[11px]">{s.team ? s.team.name : "—"}{!s.former && s.ovr !== "" && s.ovr != null ? " · OVR " + s.ovr : ""}</div>
+        </div>
+        <div className="mt-1.5 flex items-baseline justify-center gap-1 sm:mt-2">
+          <span className="font-display text-3xl font-bold italic leading-none sm:text-4xl">{v}</span>
+          <span className="text-[11px] font-semibold opacity-80">{PODIUM_UNIT[sort]}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// การ์ดบนโพเดียม = นักเตะในทีมตอนนี้ (มีรูปการ์ด) · อดีตนักเตะ / ข้อมูลเก่าที่มีแค่ชื่อ → การ์ดแทนจากสถิติ
+function Podium({ rows, sort, liveOf, onOpen }) {
+  const card = s => s && (liveOf(s) || { id: s.key, name: s.name, pos: s.pos, ovr: s.former ? "" : s.ovr, img: "" });
+  return (
+    <div className="fl-podium mx-auto grid max-w-3xl grid-cols-3 items-end gap-2 px-2 pt-7 sm:gap-6 sm:px-6 sm:pt-10">
+      {[1, 0, 2].map(i => <PodiumSpot key={i} s={rows[i]} p={card(rows[i])} rank={i + 1} sort={sort} onOpen={onOpen} />)}
+    </div>
+  );
+}
+
 // imageSetter(team) → ฟังก์ชันใส่รูปการ์ด ถ้าคนที่ล็อกอินแก้ทีมนั้นได้ (ไม่งั้น null)
 function PlayersTab({ stats, matches, teams, imageSetter }) {
   const [sort, setSort] = useState("G");
@@ -2721,50 +2796,58 @@ function PlayersTab({ stats, matches, teams, imageSetter }) {
   // อดีตนักเตะ / ข้อมูลเก่าที่มีแค่ชื่อ → ใช้ข้อมูลจากสถิติแทน (ใส่รูปไม่ได้)
   const [openKey, setOpenKey] = useState(null);
   const cur = openKey && stats.find(s => s.key === openKey);
-  const live = cur && cur.team && !cur.former && cur.playerId ? (cur.team.players || []).find(p => p.id === cur.playerId) : null;
+  const liveOf = s => s && s.team && !s.former && s.playerId ? (s.team.players || []).find(p => p.id === s.playerId) : null;
+  const live = liveOf(cur);
   const curP = live || (cur && { id: cur.playerId || cur.key, name: cur.name, pos: cur.pos, card: cur.card, ovr: cur.ovr, efhub: cur.efhub, img: "", former: cur.former });
   const open = s => setOpenKey(s.key);
   return (
     <div className="fl-enter">
       <SectionTitle icon="target" kicker="Player Stats" title="สถิตินักเตะ" />
       <Segmented value={sort} onChange={setSort} items={Object.entries(PLAYER_SORTS).map(([k, v]) => [k, v.label])} />
-      <Card className="overflow-x-auto">
-        <div className="min-w-[576px]">
-          <div className="grid grid-cols-[40px_1fr_repeat(6,44px)] gap-2 border-b border-line/15 px-4 py-3 text-[11px] font-semibold text-muted">
-            <div>#</div><div>นักเตะ</div>
-            <div className="text-center">นัด</div>
-            <div className={"text-center " + hi("G")}>G</div>
-            <div className={"text-center " + hi("A")}>A</div>
-            <div className={"text-center " + hi("motm")}>MOTM</div>
-            <div className="text-center">🟨</div>
-            <div className="text-center">🟥</div>
-          </div>
-          {rows.length === 0 && <div className="py-12 text-center text-sm text-muted">ยังไม่มีข้อมูล</div>}
-          {rows.map((s, i) => (
-            <div key={s.key} role="button" tabIndex={0} aria-label={"ดูข้อมูลนักเตะ " + s.name} onClick={() => open(s)}
-              onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(s); } }}
-              className={"grid cursor-pointer grid-cols-[40px_1fr_repeat(6,44px)] items-center gap-2 px-4 py-3 text-sm tabular-nums outline-none transition hover:bg-line/[0.05] focus-visible:bg-line/[0.08] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent " + (i < rows.length - 1 ? "border-b border-line/10" : "")}>
-              <div className={"font-display text-base font-bold italic " + (i === 0 ? "text-accent" : "text-faint")}>{i === 0 ? "★" : i + 1}</div>
-              <div className="flex min-w-0 items-center gap-2.5">
-                {s.pos ? <PosBadge pos={s.pos} /> : <span className="ef-pos bg-line/15 text-muted">—</span>}
-                <div className="min-w-0">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate font-medium text-ink">{s.name}{s.former && <span className="text-xs font-normal text-muted"> (อดีต)</span>}</span>
-                    {!s.former && <CardBadge card={s.card} />}
-                    {!s.former && <EfhubLink url={s.efhub} name={s.name} />}
-                  </div>
-                  <div className="truncate text-[11px] text-muted">{s.team ? s.team.name : "—"}{!s.former && s.ovr !== "" && s.ovr != null ? " · OVR " + s.ovr : ""}</div>
-                </div>
+      <Card className="overflow-hidden">
+        {rows.length === 0
+          ? <div className="py-12 text-center text-sm text-muted">ยังไม่มีข้อมูล</div>
+          : <Podium rows={rows} sort={sort} liveOf={liveOf} onOpen={open} />}
+        {/* อันดับ 4 ลงไป: ตารางเดิม (จอแคบเลื่อนข้างได้) */}
+        {rows.length > 3 && (
+          <div className="overflow-x-auto border-t border-line/15">
+            <div className="min-w-[576px]">
+              <div className="grid grid-cols-[40px_1fr_repeat(6,44px)] gap-2 border-b border-line/15 px-4 py-3 text-[11px] font-semibold text-muted">
+                <div>#</div><div>นักเตะ</div>
+                <div className="text-center">นัด</div>
+                <div className={"text-center " + hi("G")}>G</div>
+                <div className={"text-center " + hi("A")}>A</div>
+                <div className={"text-center " + hi("motm")}>MOTM</div>
+                <div className="text-center">🟨</div>
+                <div className="text-center">🟥</div>
               </div>
-              <div className="text-center text-soft">{s.apps}</div>
-              {stat("G", s.G)}
-              {stat("A", s.A)}
-              {stat("motm", s.motm || "–")}
-              <div className="text-center text-muted">{s.Y || "–"}</div>
-              <div className="text-center text-muted">{s.R || "–"}</div>
+              {rows.slice(3).map((s, j) => (
+                <div key={s.key} role="button" tabIndex={0} aria-label={"ดูข้อมูลนักเตะ " + s.name} onClick={() => open(s)}
+                  onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(s); } }}
+                  className={"grid cursor-pointer grid-cols-[40px_1fr_repeat(6,44px)] items-center gap-2 px-4 py-3 text-sm tabular-nums outline-none transition hover:bg-line/[0.05] focus-visible:bg-line/[0.08] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent " + (j < rows.length - 4 ? "border-b border-line/10" : "")}>
+                  <div className="font-display text-base font-bold italic text-faint">{j + 4}</div>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    {s.pos ? <PosBadge pos={s.pos} /> : <span className="ef-pos bg-line/15 text-muted">—</span>}
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate font-medium text-ink">{s.name}{s.former && <span className="text-xs font-normal text-muted"> (อดีต)</span>}</span>
+                        {!s.former && <CardBadge card={s.card} />}
+                        {!s.former && <EfhubLink url={s.efhub} name={s.name} />}
+                      </div>
+                      <div className="truncate text-[11px] text-muted">{s.team ? s.team.name : "—"}{!s.former && s.ovr !== "" && s.ovr != null ? " · OVR " + s.ovr : ""}</div>
+                    </div>
+                  </div>
+                  <div className="text-center text-soft">{s.apps}</div>
+                  {stat("G", s.G)}
+                  {stat("A", s.A)}
+                  {stat("motm", s.motm || "–")}
+                  <div className="text-center text-muted">{s.Y || "–"}</div>
+                  <div className="text-center text-muted">{s.R || "–"}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </Card>
       <p className="ef-halo mt-3 text-xs text-muted">กดที่นักเตะเพื่อดูการ์ดและผลงานรายนัด · นัด = ลงเล่น · MOTM = ผู้เล่นยอดเยี่ยมประจำนัด</p>
       {cur && cur.team && (
