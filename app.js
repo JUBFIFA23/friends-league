@@ -53,7 +53,8 @@ const P = {
   smile:'<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>',
   type:'<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
   layers:'<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
-  undo:'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>'
+  undo:'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>',
+  clipboard:'<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>'
 };
 
 const Ic = ({ n, size = 16, className = "" }) => (
@@ -3228,6 +3229,9 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
   const [textBox, setTextBox] = useState(null);     // { t, c, edit?, id? } · caption: true = คำบรรยายรูป
   const [view, setView] = useState(null);
   const [drawing, setDrawing] = useState(null);     // null = ไม่ได้วาด · { strokes: [{ pts, c, sw }], live, c, sw }
+  const [note, setNote] = useState("");             // ข้อความแจ้งสั้น ๆ ใต้แถบเครื่องมือ (หายเองใน 7 วิ)
+  const [dropping, setDropping] = useState(false);  // กำลังลากไฟล์อยู่เหนือผนัง
+  useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(""), 7000); return () => clearTimeout(t); }, [note]);
   const canPost = !!user && !err;
   const mine = m => canPost && (isAdmin || m.by === user.id);
 
@@ -3287,6 +3291,47 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
       finally { setBusy(b => b - 1); }
     }
   };
+  // ── วางรูปจากที่อื่น (เช่น คัดลอกรูปจาก Google) ──
+  // คลิปบอร์ดมีตัวรูป → แปะเลย · มีแค่ลิงก์/HTML ของรูป → ดึงข้ามเว็บไม่ได้ (เว็บต้นทางไม่อนุญาต) → บอกให้ "คัดลอกรูปภาพ"
+  const LINK_ONLY = "อันนี้คัดลอกมาเป็นลิงก์ ไม่ใช่ตัวรูป — กดค้าง/คลิกขวาที่รูปแล้วเลือก “คัดลอกรูปภาพ” (Copy image) แล้ววางใหม่ หรือบันทึกรูปลงเครื่องแล้วกด “เพิ่มรูป”";
+  const imageFiles = list => [...(list || [])].filter(f => f && /^image\//.test(f.type));
+  const paste = e => {
+    if (!canPost || drawing || textBox || picker || cardPick || view) return;
+    if (e.target && e.target.closest && e.target.closest("input, textarea, [contenteditable]")) return;   // กำลังพิมพ์ → วางข้อความตามปกติ
+    const cd = e.clipboardData;
+    if (!cd) return;
+    const files = imageFiles([...(cd.items || [])].filter(it => it.kind === "file").map(it => it.getAsFile()));
+    if (files.length) { e.preventDefault(); setNote(""); addPhotos(files); return; }
+    if (/<img/i.test(cd.getData("text/html") || "") || /^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i.test((cd.getData("text/plain") || "").trim())) { e.preventDefault(); setNote(LINK_ONLY); }
+  };
+  // ปุ่ม "วางรูป" (มือถือไม่มี Ctrl+V) → อ่านคลิปบอร์ด · iPhone จะขึ้นปุ่ม "วาง" ให้แตะยืนยัน
+  const pasteButton = async () => {
+    if (!navigator.clipboard || !navigator.clipboard.read) { setNote("เบราว์เซอร์นี้วางรูปจากปุ่มไม่ได้ — บนคอมกด Ctrl+V แทน หรือบันทึกรูปลงเครื่องแล้วกด “เพิ่มรูป”"); return; }
+    try {
+      const files = [];
+      for (const it of await navigator.clipboard.read()) {
+        const t = (it.types || []).find(x => /^image\//.test(x));
+        if (t) files.push(new File([await it.getType(t)], "paste." + (t.split("/")[1] || "png"), { type: t }));
+      }
+      if (files.length) { setNote(""); addPhotos(files); }
+      else setNote("ในคลิปบอร์ดยังไม่มีรูป — กดค้าง/คลิกขวาที่รูปแล้วเลือก “คัดลอกรูปภาพ” ก่อน แล้วค่อยกด “วางรูป”");
+    } catch (x) { setNote("วางรูปไม่ได้ — กดอนุญาตให้เว็บนี้อ่านคลิปบอร์ด หรือบันทึกรูปลงเครื่องแล้วกด “เพิ่มรูป” แทน"); }
+  };
+  const hasFiles = e => [...((e.dataTransfer && e.dataTransfer.types) || [])].indexOf("Files") >= 0;
+  const dragOver = e => { if (!canPost || drawing || !hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; if (!dropping) setDropping(true); };
+  const drop = e => {
+    setDropping(false);
+    if (!canPost || drawing || !e.dataTransfer) return;
+    const files = imageFiles(e.dataTransfer.files);
+    if (files.length) { e.preventDefault(); addPhotos(files); }
+    else if (hasFiles(e) || /<img/i.test(e.dataTransfer.getData("text/html") || "")) { e.preventDefault(); setNote(LINK_ONLY); }
+  };
+  useEffect(() => {
+    const on = e => api.paste(e);
+    document.addEventListener("paste", on);
+    return () => document.removeEventListener("paste", on);
+  }, []);
+
   const addSticker = k => { setPicker(false); place([{ kind: "sticker", s: k, w: 150, rot: wallRand(-14, 14), ...spot() }]); };
   const addCard = async p => {
     setCardPick(false);
@@ -3401,7 +3446,7 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
   };
   // ตัวจัดการให้ WallItem เรียกผ่าน ref เสมอ (ค่าล่าสุดทุกครั้ง)
   const api = useRef({}).current;
-  Object.assign(api, { down, tap, key, remove, open: setView, pick: m => setSel(m.id) });
+  Object.assign(api, { down, tap, key, remove, paste, open: setView, pick: m => setSel(m.id) });
 
   const drawStrokes = drawing ? [...drawing.strokes, ...(drawing.live ? [{ pts: drawing.live, c: drawing.c, sw: drawing.sw }] : [])] : [];
   const selMine = selItem && mine(selItem);
@@ -3425,6 +3470,9 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" aria-label="เลือกรูปลงผนัง"
               onChange={e => { const fs = [...e.target.files]; e.target.value = ""; addPhotos(fs); }} />
+            <button type="button" className={tool} onClick={pasteButton} disabled={busy > 0 || !!drawing} title="วางรูปที่คัดลอกไว้ (บนคอมกด Ctrl+V ได้เลย)">
+              <Ic n="clipboard" size={15} /> วางรูป
+            </button>
             <button type="button" className={tool} onClick={() => setCardPick(true)} disabled={!!drawing}><Ic n="shirt" size={15} /> การ์ดนักเตะ</button>
             <button type="button" className={tool} onClick={() => setPicker(true)} disabled={!!drawing}><Ic n="smile" size={15} /> สติกเกอร์</button>
             <button type="button" className={tool} onClick={() => setTextBox({ t: "", c: "yellow" })} disabled={!!drawing}><Ic n="type" size={15} /> ข้อความ</button>
@@ -3436,9 +3484,11 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
         ) : (
           <p className="px-3 pb-2.5 text-xs font-semibold text-[#3A2A00]">{user ? "ตอนนี้ลงรูปไม่ได้ (ดูข้อความด้านบน)" : "ล็อกอินเพื่อลงรูปและตกแต่งผนัง · ตอนนี้ดูได้อย่างเดียว"}</p>
         )}
+        {note && <p role="status" className="mx-2 mb-2.5 rounded-lg bg-[#081896] px-3 py-2 text-xs leading-relaxed text-white sm:mx-3">{note}</p>}
         <div ref={wrapRef} className="fl-wall-wrap">
-          <div ref={boardRef} className={"fl-wall" + (drawing ? " fl-drawing" : "")} style={{ width: WALL_W * s, height: H * s }}
+          <div ref={boardRef} className={"fl-wall" + (drawing ? " fl-drawing" : "") + (dropping ? " fl-dropping" : "")} style={{ width: WALL_W * s, height: H * s }}
             onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}
+            onDragOver={dragOver} onDragLeave={e => { if (e.target === boardRef.current) setDropping(false); }} onDrop={drop}
             onPointerDown={e => { if (e.target === boardRef.current) setSel(null); }}>
             {!moments.length && (
               <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center">
@@ -3463,6 +3513,7 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
       </div>
       <p className="ef-halo mt-3 text-xs leading-relaxed text-muted">
         กดรูปเพื่อดูภาพใหญ่ · ลาก หมุน ย่อขยาย และลบได้เฉพาะชิ้นที่ตัวเองลง{isAdmin ? " · แอดมินจัดการได้ทุกชิ้น" : ""} · ซูมเข้าเพื่อดูละเอียด (เลื่อนซ้ายขวาได้)
+        {canPost ? " · รูปจากเว็บอื่น (เช่น Google): “คัดลอกรูปภาพ” แล้วกด Ctrl+V หรือปุ่ม “วางรูป” · ลากไฟล์รูปมาวางบนผนังก็ได้" : ""}
       </p>
 
       {/* แถบล่างจอ: ระหว่างวาด / ตอนเลือกชิ้นของตัวเอง */}
