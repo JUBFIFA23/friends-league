@@ -3051,6 +3051,7 @@ const cleanMoment = m => {
   if (m.kind === "photo") {
     if (!IMG_ID_RE.test(m.img || "")) return null;
     Object.assign(o, { img: m.img, ar: n(m.ar, .1, 10, 1), cap: String(m.cap || "").slice(0, 60) });
+    if (m.s === "card") Object.assign(o, { s: "card", t: String(m.t || "").slice(0, 60) });   // การ์ดนักเตะจากทีม
   } else if (m.kind === "sticker") {
     if (!STICKERS[m.s]) return null;
     o.s = m.s;
@@ -3067,12 +3068,20 @@ const cleanMoment = m => {
 // ชิ้นบนผนัง · s = px ต่อหน่วยผนัง · mine = เป็นของฉัน (ลากได้) · sel = เลือกอยู่ (มีจุดจับหมุน / ย่อขยาย / ลบ)
 // api = ตัวจัดการจาก MomentsTab (อ้างผ่าน ref เสมอ → ไม่ต้องวาดชิ้นใหม่ทุกครั้งที่ผนังเปลี่ยน)
 const WallItem = React.memo(function WallItem({ m, s, src, sel, mine, api }) {
-  const isPhoto = m.kind === "photo", act = mine || isPhoto;
-  const label = isPhoto ? "รูป" + (m.cap ? " " + m.cap : "") + " · โดย " + (m.byName || "—")
+  const isPhoto = m.kind === "photo", isCard = isPhoto && m.s === "card", act = mine || isPhoto;
+  const label = isCard ? "การ์ด " + (m.t || "นักเตะ") + (m.cap ? " · " + m.cap : "") + " · โดย " + (m.byName || "—")
+    : isPhoto ? "รูป" + (m.cap ? " " + m.cap : "") + " · โดย " + (m.byName || "—")
     : m.kind === "sticker" ? "สติกเกอร์ " + ((STICKERS[m.s] || {}).label || "")
     : m.kind === "text" ? "ข้อความ " + m.t : "ลายเส้นของ " + (m.byName || "—");
   let body;
-  if (isPhoto) body = (
+  if (isCard) body = (
+    <div className="fl-wall-card">
+      {src ? <img src={src} alt="" draggable={false} style={{ aspectRatio: 1 / (m.ar || 1.414) }} />
+        : <div className="fl-polaroid-wait" style={{ aspectRatio: 1 / (m.ar || 1.414) }} />}
+      {m.cap && <div className="fl-wall-card-cap" style={{ fontSize: Math.max(7, m.w * s * 0.08) }}>{m.cap}</div>}
+    </div>
+  );
+  else if (isPhoto) body = (
     <div className="fl-polaroid">
       {src ? <img src={src} alt="" draggable={false} style={{ aspectRatio: 1 / (m.ar || 1) }} />
         : <div className="fl-polaroid-wait" style={{ aspectRatio: 1 / (m.ar || 1) }} />}
@@ -3155,10 +3164,45 @@ function TextModal({ init, caption = false, onSave, onClose }) {
   );
 }
 
+// การ์ดนักเตะจากทีม: เลือกทีม (ทีมของตัวเองขึ้นก่อน) → แตะการ์ด · เฉพาะนักเตะที่ใส่รูปการ์ดไว้แล้ว
+function CardPicker({ teams, images, firstTeamId, onPick, onClose }) {
+  const withCards = t => (t.players || []).filter(p => p.name && p.img && images[p.img]);
+  const list = [...teams].sort((a, b) => (b.id === firstTeamId) - (a.id === firstTeamId));
+  const [tid, setTid] = useState(() => { const t = list.find(x => withCards(x).length) || list[0]; return t ? t.id : null; });
+  const team = list.find(t => t.id === tid), cards = team ? withCards(team) : [];
+  return (
+    <Modal onClose={onClose} className="max-w-2xl">
+      <ModalHead kicker="Moments" title="การ์ดนักเตะจากทีม" onClose={onClose} />
+      {!list.length ? <p className="py-10 text-center text-sm text-muted">ยังไม่มีทีมในลีก</p> : (<>
+        <Segmented value={tid} onChange={setTid} items={list.map(t => [t.id, t.name + " (" + withCards(t).length + ")"])} />
+        {cards.length ? (
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+            {cards.map(p => (
+              <button key={p.id} type="button" onClick={() => onPick(p)} aria-label={"แปะการ์ด " + p.name}
+                className="min-w-0 rounded-xl p-1 text-center outline-none transition hover:bg-line/[0.06] focus-visible:ring-2 focus-visible:ring-accent">
+                <PlayerCard p={p} pos={p.pos} kit={team.kit} />
+                <span className="mt-1.5 block truncate text-xs font-medium text-soft">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        ) : <p className="py-10 text-center text-sm leading-relaxed text-muted">ทีมนี้ยังไม่มีรูปการ์ดนักเตะ · ผู้จัดการทีมหรือแอดมินใส่รูปการ์ดได้ที่โปรไฟล์ทีม</p>}
+      </>)}
+    </Modal>
+  );
+}
+
+// สัดส่วนสูง÷กว้างของรูป (ไว้วางการ์ดให้ไม่ถูกบีบ) · โหลดไม่ได้ → สัดส่วนการ์ดมาตรฐาน
+const imageRatio = src => new Promise(res => {
+  const i = new Image();
+  i.onload = () => res(i.naturalWidth ? Math.round(i.naturalHeight / i.naturalWidth * 1000) / 1000 : 1.414);
+  i.onerror = () => res(1.414);
+  i.src = src;
+});
+
 function MomentView({ m, src, onClose }) {
   return (
     <Modal onClose={onClose} className="max-w-3xl">
-      <ModalHead kicker="Moments" title={m.cap || "รูปบนผนัง"} onClose={onClose} />
+      <ModalHead kicker="Moments" title={m.cap || m.t || "รูปบนผนัง"} onClose={onClose} />
       {src ? <img src={src} alt={m.cap || "รูปบนผนัง Moments"} className="mx-auto block max-h-[70vh] w-auto max-w-full rounded-lg ring-1 ring-line/20" />
         : <p className="py-12 text-center text-sm text-muted">กำลังโหลดรูป…</p>}
       <p className="mt-3 text-xs text-muted">ลงโดย {m.byName || "—"} · {new Date(m.at || Date.now()).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}</p>
@@ -3166,7 +3210,7 @@ function MomentView({ m, src, onClose }) {
   );
 }
 
-function MomentsTab({ moments, setMoments, user, isAdmin, err }) {
+function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
   const { images, putImage } = useContext(ImgContext);
   const wrapRef = useRef(null), boardRef = useRef(null), fileRef = useRef(null);
   const [cw, setCw] = useState(0);
@@ -3178,6 +3222,7 @@ function MomentsTab({ moments, setMoments, user, isAdmin, err }) {
   const gest = useRef(null), stroke = useRef(null);
   const [busy, setBusy] = useState(0);              // จำนวนรูปที่กำลังลง
   const [picker, setPicker] = useState(false);
+  const [cardPick, setCardPick] = useState(false);
   const [textBox, setTextBox] = useState(null);     // { t, c, edit?, id? } · caption: true = คำบรรยายรูป
   const [view, setView] = useState(null);
   const [drawing, setDrawing] = useState(null);     // null = ไม่ได้วาด · { strokes: [{ pts, c, sw }], live, c, sw }
@@ -3241,6 +3286,11 @@ function MomentsTab({ moments, setMoments, user, isAdmin, err }) {
     }
   };
   const addSticker = k => { setPicker(false); place([{ kind: "sticker", s: k, w: 150, rot: wallRand(-14, 14), ...spot() }]); };
+  const addCard = async p => {
+    setCardPick(false);
+    const ar = images[p.img] ? await imageRatio(images[p.img]) : 1.414;
+    place([{ kind: "photo", s: "card", img: p.img, ar, cap: "", t: String(p.name || "").slice(0, 60), w: 200, rot: wallRand(-8, 8), ...spot() }]);
+  };
   const saveText = (t, c) => {
     const box = textBox;
     setTextBox(null);
@@ -3373,6 +3423,7 @@ function MomentsTab({ moments, setMoments, user, isAdmin, err }) {
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" aria-label="เลือกรูปลงผนัง"
               onChange={e => { const fs = [...e.target.files]; e.target.value = ""; addPhotos(fs); }} />
+            <button type="button" className={tool} onClick={() => setCardPick(true)} disabled={!!drawing}><Ic n="shirt" size={15} /> การ์ดนักเตะ</button>
             <button type="button" className={tool} onClick={() => setPicker(true)} disabled={!!drawing}><Ic n="smile" size={15} /> สติกเกอร์</button>
             <button type="button" className={tool} onClick={() => setTextBox({ t: "", c: "yellow" })} disabled={!!drawing}><Ic n="type" size={15} /> ข้อความ</button>
             <button type="button" className={tool + (drawing ? " fl-on" : "")} aria-pressed={!!drawing}
@@ -3448,6 +3499,7 @@ function MomentsTab({ moments, setMoments, user, isAdmin, err }) {
       )}
 
       {picker && <StickerPicker onPick={addSticker} onClose={() => setPicker(false)} />}
+      {cardPick && <CardPicker teams={teams} images={images} firstTeamId={user && user.teamId} onPick={addCard} onClose={() => setCardPick(false)} />}
       {textBox && <TextModal init={textBox} caption={!!textBox.caption} onSave={saveText} onClose={() => setTextBox(null)} />}
       {view && <MomentView m={view} src={view.img ? images[view.img] : null} onClose={() => setView(null)} />}
     </div>
@@ -4407,7 +4459,7 @@ function FriendsLeague() {
 
         {/* ═══ MOMENTS (ผนังสมุดภาพ) ═══ */}
         {tab === "moments" && (
-          <MomentsTab moments={moments} setMoments={setMoments} user={user} isAdmin={isAdmin} err={momentsErr} />
+          <MomentsTab moments={moments} setMoments={setMoments} teams={teams} user={user} isAdmin={isAdmin} err={momentsErr} />
         )}
         </>)}
       </main>

@@ -351,6 +351,15 @@ input[type=color]::-webkit-color-swatch {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 .fl-sticker > svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 6px 8px rgb(0 0 0 / .45)); }
+/* การ์ดนักเตะจากทีม: รูปการ์ดมุมมน (ไม่มีกรอบโพลารอยด์ เพราะการ์ดมีกรอบในตัว) + ป้ายคำบรรยายใต้การ์ด */
+.fl-wall-card img, .fl-wall-card .fl-polaroid-wait {
+  display: block; width: 100%; object-fit: cover; border-radius: 7%; -webkit-user-drag: none;
+  box-shadow: 0 14px 26px -10px rgb(0 0 0 / .8), 0 0 0 1px rgb(255 255 255 / .22);
+}
+.fl-wall-card-cap {
+  margin-top: .4em; padding: .2em .6em; border-radius: 999px; overflow: hidden; text-align: center; white-space: nowrap; text-overflow: ellipsis;
+  font: italic 700 1em/1.25 Kanit, sans-serif; color: #fff; background: rgb(6 14 42 / .88); box-shadow: 0 4px 10px rgb(0 0 0 / .4);
+}
 /* ข้อความบนผนัง: ขอบน้ำเงินเข้มรอบตัวอักษร (เงาหลายทิศ) → อ่านออกบนรูปทุกสี */
 .fl-wall-text {
   font: italic 800 1em/1.15 Kanit, sans-serif; white-space: pre;
