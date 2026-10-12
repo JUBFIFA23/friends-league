@@ -3083,14 +3083,7 @@ const WallItem = React.memo(function WallItem({ m, s, src, sel, mine, api }) {
     : m.kind === "sticker" ? "สติกเกอร์ " + ((STICKERS[m.s] || {}).label || "")
     : m.kind === "text" ? "ข้อความ " + m.t : "ลายเส้นของ " + (m.byName || "—");
   let body;
-  if (isCard) body = (
-    <div className="fl-wall-card">
-      {src ? <img src={src} alt="" draggable={false} style={{ aspectRatio: 1 / (m.ar || 1.414) }} />
-        : <div className="fl-polaroid-wait" style={{ aspectRatio: 1 / (m.ar || 1.414) }} />}
-      {m.cap && <div className="fl-wall-card-cap" style={{ fontSize: Math.max(7, m.w * s * 0.08) }}>{m.cap}</div>}
-    </div>
-  );
-  else if (isPhoto) body = (
+  if (isPhoto) body = (   // รูป และการ์ดนักเตะจากทีม: กรอบโพลารอยด์ขาวเหมือนกันทุกจอ
     <div className="fl-polaroid">
       {src ? <img src={src} alt="" draggable={false} style={{ aspectRatio: 1 / (m.ar || 1) }} />
         : <div className="fl-polaroid-wait" style={{ aspectRatio: 1 / (m.ar || 1) }} />}
