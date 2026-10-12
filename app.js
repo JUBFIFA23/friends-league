@@ -3202,6 +3202,64 @@ const imageRatio = src => new Promise(res => {
   i.src = src;
 });
 
+// ลิงก์รูป (http/https หรือ data:image) → ไฟล์รูป · เว็บต้นทางส่วนใหญ่ไม่อนุญาตให้ดึงข้ามเว็บ → แจ้งให้คัดลอกตัวรูปแทน
+async function fileFromUrl(src) {
+  let blob;
+  try {
+    const res = await fetch(src, { mode: "cors", credentials: "omit", referrerPolicy: "no-referrer" });
+    if (!res.ok) throw new Error("http " + res.status);
+    blob = await res.blob();
+  } catch (e) {
+    throw new Error("เว็บต้นทางไม่ให้ดึงรูปผ่านลิงก์ — คลิกขวาที่รูปแล้วเลือก “คัดลอกรูปภาพ” (Copy image) แล้ววางใหม่ หรือบันทึกรูปลงเครื่องแล้วกด “เลือกรูปจากเครื่อง”");
+  }
+  if (!/^image\//.test(blob.type)) throw new Error("ลิงก์นี้ไม่ใช่ไฟล์รูป");
+  return new File([blob], "link." + (blob.type.split("/")[1] || "png"), { type: blob.type });
+}
+
+// หน้าต่าง "เพิ่มรูป": 1) เลือกรูปจากเครื่อง · 2) กรอบวางรูปที่คัดลอกมา (ช่องแก้ไขได้ → คลิกขวามีเมนู "วาง" · มือถือกดค้างแล้ว "วาง" ได้ ไม่ต้องขอสิทธิ์คลิปบอร์ด)
+// ในกรอบพิมพ์ไม่ได้ (รับแค่การวาง/ลากไฟล์) · วางมาเป็นลิงก์/HTML ของรูป → ลองดึงจากลิงก์
+function AddPhotoModal({ onPick, onFiles, onClose }) {
+  const zone = useRef(null);
+  const [msg, setMsg] = useState(""), [busy, setBusy] = useState(false), [over, setOver] = useState(false);
+  useEffect(() => { if (zone.current && matchMedia("(pointer: fine)").matches) zone.current.focus(); }, []);   // คอม: กด Ctrl+V ได้ทันที
+  const take = async dt => {
+    if (!dt || busy) return;
+    const isImg = f => f && /^image\//.test(f.type);
+    let files = [...(dt.files || [])].filter(isImg);   // รูปเดียวกันอยู่ทั้งใน files และ items → ใช้ files ก่อน ไม่ให้ได้ซ้ำ
+    if (!files.length) files = [...(dt.items || [])].filter(it => it.kind === "file").map(it => it.getAsFile()).filter(isImg);
+    if (files.length) { onFiles(files); return; }
+    const html = dt.getData("text/html") || "", text = (dt.getData("text/plain") || "").trim();
+    const src = (html.match(/<img[^>]+src=["']([^"']+)["']/i) || [])[1] || (/^(https?:\/\/|data:image\/)\S+$/i.test(text) ? text : "");
+    if (!src) { setMsg("ไม่พบรูปในสิ่งที่วาง — คัดลอกตัวรูป (หรือลิงก์รูป) แล้ววางใหม่"); return; }
+    setBusy(true); setMsg("");
+    try { onFiles([await fileFromUrl(src.replace(/&amp;/g, "&"))]); }
+    catch (e) { setMsg(e.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal onClose={onClose} className="max-w-lg">
+      <ModalHead kicker="Moments" title="เพิ่มรูป" onClose={onClose} />
+      <Btn variant="primary" className="w-full justify-center py-3 text-base" onClick={onPick}><Ic n="upload" size={16} /> เลือกรูปจากเครื่อง</Btn>
+      <div className="my-4 flex items-center gap-3 text-xs text-muted"><span className="h-px flex-1 bg-line/20" />หรือ<span className="h-px flex-1 bg-line/20" /></div>
+      <div className={"fl-paste relative grid min-h-[170px] place-items-center rounded-2xl border-2 border-dashed px-5 py-6 text-center transition " + (over ? "border-accent bg-accent/10" : "border-line/30 bg-sunken/60")}>
+        <div className="pointer-events-none">
+          <span className="mx-auto mb-2 grid h-11 w-11 place-items-center rounded-full bg-accent/15 text-accent"><Ic n="clipboard" size={20} /></span>
+          <div className="font-display text-lg font-bold italic text-ink">{busy ? "กำลังดึงรูปจากลิงก์…" : "วางรูปที่คัดลอกมาตรงนี้"}</div>
+          <div className="mt-1.5 text-xs leading-relaxed text-muted">คลิกขวาในกรอบแล้วเลือก “วาง” (Paste) หรือกด Ctrl+V<br />มือถือ: กดค้างในกรอบแล้วเลือก “วาง” · วางลิงก์รูป หรือลากไฟล์รูปมาวางก็ได้</div>
+        </div>
+        <div ref={zone} contentEditable suppressContentEditableWarning inputMode="none" role="textbox" aria-label="กรอบวางรูปที่คัดลอกมา"
+          className="absolute inset-0 rounded-2xl text-transparent caret-transparent outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          onPaste={e => { e.preventDefault(); take(e.clipboardData); }}
+          onDrop={e => { e.preventDefault(); setOver(false); take(e.dataTransfer); }}
+          onDragOver={e => { e.preventDefault(); if (!over) setOver(true); }} onDragLeave={() => setOver(false)}
+          onKeyDown={e => { if (!e.ctrlKey && !e.metaKey && e.key.length === 1) e.preventDefault(); }}
+          onInput={e => { e.currentTarget.textContent = ""; }} />
+      </div>
+      {msg && <p role="alert" className="mt-3 rounded-lg bg-loss/10 px-3 py-2 text-xs leading-relaxed text-loss ring-1 ring-loss/30">{msg}</p>}
+    </Modal>
+  );
+}
+
 function MomentView({ m, src, onClose }) {
   return (
     <Modal onClose={onClose} className="max-w-3xl">
@@ -3226,6 +3284,7 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
   const [busy, setBusy] = useState(0);              // จำนวนรูปที่กำลังลง
   const [picker, setPicker] = useState(false);
   const [cardPick, setCardPick] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);   // หน้าต่าง "เพิ่มรูป" (เลือกจากเครื่อง / กรอบวางรูป)
   const [textBox, setTextBox] = useState(null);     // { t, c, edit?, id? } · caption: true = คำบรรยายรูป
   const [view, setView] = useState(null);
   const [drawing, setDrawing] = useState(null);     // null = ไม่ได้วาด · { strokes: [{ pts, c, sw }], live, c, sw }
@@ -3296,26 +3355,13 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
   const LINK_ONLY = "อันนี้คัดลอกมาเป็นลิงก์ ไม่ใช่ตัวรูป — กดค้าง/คลิกขวาที่รูปแล้วเลือก “คัดลอกรูปภาพ” (Copy image) แล้ววางใหม่ หรือบันทึกรูปลงเครื่องแล้วกด “เพิ่มรูป”";
   const imageFiles = list => [...(list || [])].filter(f => f && /^image\//.test(f.type));
   const paste = e => {
-    if (!canPost || drawing || textBox || picker || cardPick || view) return;
+    if (!canPost || drawing || textBox || picker || cardPick || view || addOpen) return;
     if (e.target && e.target.closest && e.target.closest("input, textarea, [contenteditable]")) return;   // กำลังพิมพ์ → วางข้อความตามปกติ
     const cd = e.clipboardData;
     if (!cd) return;
     const files = imageFiles([...(cd.items || [])].filter(it => it.kind === "file").map(it => it.getAsFile()));
     if (files.length) { e.preventDefault(); setNote(""); addPhotos(files); return; }
     if (/<img/i.test(cd.getData("text/html") || "") || /^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i.test((cd.getData("text/plain") || "").trim())) { e.preventDefault(); setNote(LINK_ONLY); }
-  };
-  // ปุ่ม "วางรูป" (มือถือไม่มี Ctrl+V) → อ่านคลิปบอร์ด · iPhone จะขึ้นปุ่ม "วาง" ให้แตะยืนยัน
-  const pasteButton = async () => {
-    if (!navigator.clipboard || !navigator.clipboard.read) { setNote("เบราว์เซอร์นี้วางรูปจากปุ่มไม่ได้ — บนคอมกด Ctrl+V แทน หรือบันทึกรูปลงเครื่องแล้วกด “เพิ่มรูป”"); return; }
-    try {
-      const files = [];
-      for (const it of await navigator.clipboard.read()) {
-        const t = (it.types || []).find(x => /^image\//.test(x));
-        if (t) files.push(new File([await it.getType(t)], "paste." + (t.split("/")[1] || "png"), { type: t }));
-      }
-      if (files.length) { setNote(""); addPhotos(files); }
-      else setNote("ในคลิปบอร์ดยังไม่มีรูป — กดค้าง/คลิกขวาที่รูปแล้วเลือก “คัดลอกรูปภาพ” ก่อน แล้วค่อยกด “วางรูป”");
-    } catch (x) { setNote("วางรูปไม่ได้ — กดอนุญาตให้เว็บนี้อ่านคลิปบอร์ด หรือบันทึกรูปลงเครื่องแล้วกด “เพิ่มรูป” แทน"); }
   };
   const hasFiles = e => [...((e.dataTransfer && e.dataTransfer.types) || [])].indexOf("Files") >= 0;
   const dragOver = e => { if (!canPost || drawing || !hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; if (!dropping) setDropping(true); };
@@ -3465,14 +3511,11 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
         </div>
         {canPost ? (
           <div className="flex flex-wrap gap-1.5 px-2 pb-2.5 sm:px-3">
-            <button type="button" className={tool} onClick={() => fileRef.current && fileRef.current.click()} disabled={busy > 0 || !!drawing}>
+            <button type="button" className={tool} onClick={() => setAddOpen(true)} disabled={busy > 0 || !!drawing}>
               <Ic n="camera" size={15} /> {busy ? "กำลังลงรูป…" : "เพิ่มรูป"}
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" aria-label="เลือกรูปลงผนัง"
-              onChange={e => { const fs = [...e.target.files]; e.target.value = ""; addPhotos(fs); }} />
-            <button type="button" className={tool} onClick={pasteButton} disabled={busy > 0 || !!drawing} title="วางรูปที่คัดลอกไว้ (บนคอมกด Ctrl+V ได้เลย)">
-              <Ic n="clipboard" size={15} /> วางรูป
-            </button>
+              onChange={e => { const fs = [...e.target.files]; e.target.value = ""; setAddOpen(false); addPhotos(fs); }} />
             <button type="button" className={tool} onClick={() => setCardPick(true)} disabled={!!drawing}><Ic n="shirt" size={15} /> การ์ดนักเตะ</button>
             <button type="button" className={tool} onClick={() => setPicker(true)} disabled={!!drawing}><Ic n="smile" size={15} /> สติกเกอร์</button>
             <button type="button" className={tool} onClick={() => setTextBox({ t: "", c: "yellow" })} disabled={!!drawing}><Ic n="type" size={15} /> ข้อความ</button>
@@ -3513,7 +3556,7 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
       </div>
       <p className="ef-halo mt-3 text-xs leading-relaxed text-muted">
         กดรูปเพื่อดูภาพใหญ่ · ลาก หมุน ย่อขยาย และลบได้เฉพาะชิ้นที่ตัวเองลง{isAdmin ? " · แอดมินจัดการได้ทุกชิ้น" : ""} · ซูมเข้าเพื่อดูละเอียด (เลื่อนซ้ายขวาได้)
-        {canPost ? " · รูปจากเว็บอื่น (เช่น Google): “คัดลอกรูปภาพ” แล้วกด Ctrl+V หรือปุ่ม “วางรูป” · ลากไฟล์รูปมาวางบนผนังก็ได้" : ""}
+        {canPost ? " · รูปจากเว็บอื่น (เช่น Google): “คัดลอกรูปภาพ” แล้วกด “เพิ่มรูป” › วางในกรอบ (หรือกด Ctrl+V บนผนังได้เลย) · ลากไฟล์รูปมาวางบนผนังก็ได้" : ""}
       </p>
 
       {/* แถบล่างจอ: ระหว่างวาด / ตอนเลือกชิ้นของตัวเอง */}
@@ -3553,6 +3596,7 @@ function MomentsTab({ moments, setMoments, teams, user, isAdmin, err }) {
 
       {picker && <StickerPicker onPick={addSticker} onClose={() => setPicker(false)} />}
       {cardPick && <CardPicker teams={teams} images={images} firstTeamId={user && user.teamId} onPick={addCard} onClose={() => setCardPick(false)} />}
+      {addOpen && <AddPhotoModal onPick={() => fileRef.current && fileRef.current.click()} onFiles={fs => { setAddOpen(false); addPhotos(fs); }} onClose={() => setAddOpen(false)} />}
       {textBox && <TextModal init={textBox} caption={!!textBox.caption} onSave={saveText} onClose={() => setTextBox(null)} />}
       {view && <MomentView m={view} src={view.img ? images[view.img] : null} onClose={() => setView(null)} />}
     </div>
