@@ -60,41 +60,66 @@ body::before {
     linear-gradient(180deg, #0B27C4 0%, rgb(var(--page)) 520px);
 }
 
-/* ══════════════════ กรอบขอบเว็บสีเหลือง (ใน index.html › .ef-stripes) ══════════════════
-   แบบ eFootball Championship: เศษแสงแหลม ๆ พุ่งจากขอบซ้าย/ขวา + ห้อยจากใต้แถบเมนู + พุ่งขึ้นจากมุมล่าง
+/* ══════════════════ แถบเหลืองวิ่งที่ขอบเว็บ (ใน index.html › .ef-stripes) ══════════════════
+   แบบตัวอย่างเกม eFootball 2022: เส้นแนวนอนหลายขนาดผสมเส้นเฉียง สุ่มลายใหม่ทุกรอบ (สคริปต์ใน index.html วาดเป็น SVG ทีละกลุ่ม)
    แถบข้างกว้างเท่าที่ว่างข้างเนื้อหา (เนื้อหากว้าง 1152px = max-w-6xl) → ไม่ยื่นไปทับเนื้อหา · จอแคบเหลือขอบบาง 16px (ในระยะขอบ 20px ของ main)
-   พุ่งออกจากขอบตอนเปิด → ขยับเข้าออกเบา ๆ + บางชิ้นกะพริบแบบฟ้าแลบ · สีเหลืองทึบ (ไม่หรี่ → ไม่เป็นสีขุ่น)
-   ตัวหนังสือบนพื้นใช้ .ef-halo ให้อ่านง่าย */
+   สีเหลืองทึบ (ไม่หรี่ → ไม่เป็นสีขุ่น) · ตัวหนังสือบนพื้นใช้ .ef-halo ให้อ่านง่าย */
 .ef-stripes { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.ef-stripes svg { position: absolute; top: calc(110px + env(safe-area-inset-top)); width: clamp(16px, calc(50vw - 576px), 10vw);
-  height: calc(100% - 110px - env(safe-area-inset-top)); overflow: visible; }   /* เริ่มใต้แถบเมนู */
+.ef-stripes .fl, .ef-stripes .fr { position: absolute; top: calc(122px + env(safe-area-inset-top)); bottom: 0;
+  width: clamp(16px, calc(50vw - 576px), 16vw); }   /* เริ่มใต้แถบเมนู (สูง 116px) ไม่ลอดใต้แถบเมนูที่โปร่งแสง */
+@media (max-width: 639px) {   /* จอแคบ: แถวเมนูเลื่อนข้างได้ บางเครื่องมีแถบเลื่อนทำให้แถบเมนูสูงขึ้นอีก ~9px */
+  .ef-stripes .fl, .ef-stripes .fr { top: calc(131px + env(safe-area-inset-top)); }
+}
 .ef-stripes .fl { left: 0; }
 .ef-stripes .fr { right: 0; }
-.ef-stripes .s { fill: rgb(var(--stripe)); }
-.ef-stripes .bolt { fill: none; stroke: rgb(var(--stripe)); stroke-width: 7px; stroke-linejoin: miter; stroke-linecap: square; vector-effect: non-scaling-stroke; }
-.ef-stripes .in { transform-box: fill-box; animation: ef-in .7s cubic-bezier(.2, .9, .25, 1) both; }
-.ef-stripes .fl .in { transform-origin: left center; }
-.ef-stripes .fr .in { transform-origin: right center; }
-.ef-stripes .in.dn { transform-origin: center top; animation-name: ef-in-y; }      /* ห้อยลงจากใต้แถบเมนู */
-.ef-stripes .in.up { transform-origin: center bottom; animation-name: ef-in-y; }   /* พุ่งขึ้นจากขอบล่าง */
-@keyframes ef-in   { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-@keyframes ef-in-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-/* ขยับเข้าออกเบา ๆ (ซ้าย/ขวาจังหวะไม่เท่ากัน ดูมีชีวิต) */
-.ef-stripes .breathe { animation: ef-breathe-l 5.5s ease-in-out 1s infinite alternate; }
-.ef-stripes .fr .breathe { animation-name: ef-breathe-r; animation-duration: 6.5s; }
-@keyframes ef-breathe-l { to { transform: translateX(-7px); } }
-@keyframes ef-breathe-r { to { transform: translateX(7px); } }
-/* จอแคบ (ขอบบาง): เส้นบางลง + ขยับน้อยลง */
-@media (max-width: 1183px) {
-  .ef-stripes .bolt { stroke-width: 4px; }
-  @keyframes ef-breathe-l { to { transform: translateX(-3px); } }
-  @keyframes ef-breathe-r { to { transform: translateX(3px); } }
-}
-/* ฟ้าแลบ: กะพริบสั้น ๆ เป็นระยะ */
-.ef-stripes .flick { animation: ef-flick 7s linear 2s infinite; }
-.ef-stripes .flick-2 { animation-duration: 8.5s; animation-delay: 4s; }
-.ef-stripes .flick-3 { animation-duration: 9.5s; animation-delay: 6s; }
-@keyframes ef-flick { 0%, 90%, 100% { opacity: 1; } 92% { opacity: .2; } 94% { opacity: 1; } 96% { opacity: .45; } }
+.ef-stripes .slot { position: absolute; left: 0; right: 0; }
+.ef-stripes .g { position: absolute; left: 0; display: block; overflow: hidden; }
+.ef-stripes .fl .g { transform-origin: left center; }
+.ef-stripes .fr .g { transform-origin: right center; }
+.ef-stripes .g rect, .ef-stripes .g polygon { fill: rgb(var(--stripe)); }
+.ef-stripes .g polygon { stroke: rgb(var(--stripe)); stroke-width: 1.5px; stroke-linejoin: round; }   /* มุมเส้นเฉียงมนนิด ๆ */
+.ef-stripes .gl { transform-box: fill-box; animation: ef-glitch 3.3s steps(1) var(--gd, 1s) infinite; }
+/* 3 ท่า (สุ่มต่อกลุ่ม) · ทุกท่าเริ่มและจบที่พ้นจอ = จังหวะที่สคริปต์สุ่มลายใหม่ ไม่มีใครเห็นตอนเปลี่ยน */
+@keyframes ef-bar-l { 0% { transform: translateX(-110%); } 9% { transform: translateX(3%); } 13%, 64% { transform: translateX(0); } 74%, 100% { transform: translateX(-110%); } }
+@keyframes ef-bar-r { 0% { transform: translateX(110%); } 9% { transform: translateX(-3%); } 13%, 64% { transform: translateX(0); } 74%, 100% { transform: translateX(110%); } }
+@keyframes ef-grow-l { 0% { transform: scaleX(0); } 12%, 66% { transform: scaleX(1); } 76%, 100% { transform: scaleX(0); } }
+@keyframes ef-grow-r { 0% { transform: scaleX(0); } 12%, 66% { transform: scaleX(1); } 76%, 100% { transform: scaleX(0); } }
+@keyframes ef-step-l { 0% { transform: translateX(-110%); } 4% { transform: translateX(-72%); } 7% { transform: translateX(-36%); } 10%, 62% { transform: translateX(0); }
+  66% { transform: translateX(-30%); } 70% { transform: translateX(-66%); } 74%, 100% { transform: translateX(-110%); } }
+@keyframes ef-step-r { 0% { transform: translateX(110%); } 4% { transform: translateX(72%); } 7% { transform: translateX(36%); } 10%, 62% { transform: translateX(0); }
+  66% { transform: translateX(30%); } 70% { transform: translateX(66%); } 74%, 100% { transform: translateX(110%); } }
+/* กะพริบแบบดิจิทัล: กระตุกเข้าด้านใน แล้วกลับที่ (ฝั่งขวาถูกกลับด้านทั้งกลุ่มอยู่แล้ว ใช้ท่าเดียวกันได้) */
+@keyframes ef-glitch { 0%, 88%, 100% { transform: none; opacity: 1; } 90% { transform: translateX(22%); } 93% { transform: translateX(-9%); opacity: .55; } 96% { transform: none; opacity: 1; } }
+
+/* ══════════════════ อินโทรตอนเปิดเว็บ (ใน index.html › .fl-intro) ══════════════════
+   ชื่อคลาสขึ้นต้น fl- เสมอ (เช่น fl-ring) · ชื่อสั้นอย่าง ring จะชนคำสั่งของ Tailwind แล้วได้เส้นขอบแปลก ๆ
+   แถบเหลืองกวาดเข้า (0–1.2 วิ) → วงแหวนวาด + ถ้วยรางวัล (0.7–1.7) → ชื่อลีก (1.4–2.1) → แถบกวาดออก + เปิดม่านเข้าหน้าเว็บ (2.0–2.9) */
+.fl-intro { position: fixed; inset: 0; z-index: 100; display: none; place-items: center; align-content: center; gap: clamp(8px, 2vh, 18px);
+  overflow: hidden; cursor: pointer; text-align: center; background: linear-gradient(180deg, #0B27C4, rgb(var(--page))); }
+.fl-intro.play { display: grid; animation: fl-intro-out 2.9s cubic-bezier(.7, 0, .3, 1) both; }
+@keyframes fl-intro-out { 0%, 80% { clip-path: inset(0 0 0 0); } 100% { clip-path: inset(0 0 0 100%); } }
+.fl-intro .lane { position: absolute; left: 0; right: 0; top: var(--t); height: var(--h); }
+.fl-intro .lane i { display: block; height: 100%; width: var(--w); margin-left: var(--x); border-radius: 999px; background: rgb(var(--stripe)); }
+.fl-intro.play .sweep-in .lane { animation: fl-lane-in .9s cubic-bezier(.75, 0, .25, 1) var(--d) both; }
+.fl-intro.play .sweep-out .lane { animation: fl-lane-out .75s cubic-bezier(.75, 0, .25, 1) var(--d) both; }
+@keyframes fl-lane-in { from { transform: translateX(105%); } to { transform: translateX(-105%); } }
+@keyframes fl-lane-out { from { transform: translateX(-105%); } to { transform: translateX(105%); } }
+.fl-intro .mark { position: relative; width: clamp(96px, 24vmin, 190px); aspect-ratio: 1; }
+.fl-intro .fl-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.fl-intro .fl-ring circle { fill: none; stroke: rgb(var(--stripe)); stroke-width: 11; stroke-dasharray: 239; stroke-dashoffset: 239; }
+.fl-intro.play .fl-ring { animation: fl-ring-spin .8s cubic-bezier(.2, .8, .2, 1) .7s both; }
+.fl-intro.play .fl-ring circle { animation: fl-ring-draw .8s cubic-bezier(.2, .8, .2, 1) .7s both; }
+@keyframes fl-ring-draw { to { stroke-dashoffset: 0; } }
+@keyframes fl-ring-spin { from { transform: rotate(-200deg); } to { transform: rotate(-90deg); } }
+.fl-intro .cup { position: absolute; inset: 27%; width: 46%; height: 46%; }
+.fl-intro.play .cup { animation: fl-pop .45s cubic-bezier(.3, 1.6, .5, 1) 1.25s both; }
+@keyframes fl-pop { from { transform: scale(0); } to { transform: scale(1); } }
+.fl-intro .word { position: relative; font-family: Kanit, "Noto Sans Thai", sans-serif; font-style: italic; font-weight: 700;
+  font-size: clamp(30px, 7.5vw, 72px); line-height: 1; letter-spacing: .04em; color: #fff; }
+.fl-intro .sub { position: relative; font-weight: 600; font-size: clamp(10px, 1.5vw, 14px); letter-spacing: .3em; color: rgb(var(--stripe)); }
+.fl-intro.play .word { animation: fl-rise .5s cubic-bezier(.2, .8, .2, 1) 1.4s both; }
+.fl-intro.play .sub { animation: fl-rise .5s cubic-bezier(.2, .8, .2, 1) 1.6s both; }
+@keyframes fl-rise { from { transform: translateY(40%); opacity: 0; } to { transform: none; opacity: 1; } }
 
 /* ตัวหนังสือที่วางบนพื้นหลังโดยตรง (หัวข้อ ลิงก์ ท้ายหน้า): ขอบเงาสีพื้น → อ่านออกแม้ทับลายเหลือง */
 .ef-halo { text-shadow: 0 0 2px rgb(var(--page)), 0 0 4px rgb(var(--page)), 0 0 10px rgb(var(--page)), 0 0 22px rgb(var(--page) / .9); }

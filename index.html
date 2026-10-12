@@ -71,49 +71,194 @@
 </head>
 <body>
 
-  <!-- ═══ กรอบขอบเว็บสีเหลือง (ตกแต่งเท่านั้น · ลอยอยู่หลังเนื้อหา) ═══
-       พุ่งออกจากขอบตอนเปิด → ขยับเข้าออกเบา ๆ + บางชิ้นกะพริบ · prefers-reduced-motion = ลายนิ่ง -->
-  <div class="ef-stripes" aria-hidden="true">
-    <!-- กรอบขอบเว็บแบบ eFootball Championship: เศษแสงเหลืองแหลม ๆ พุ่งจากขอบซ้าย/ขวา + ห้อยจากใต้แถบเมนู + พุ่งขึ้นจากมุมล่าง
-         แถบข้างกว้างเท่าที่ว่างข้างเนื้อหา (style.css) · ช่วงบนสุดมีแต่ชิ้นสั้น ๆ → ไม่ยื่นไปทับหัวข้อหน้า แม้ในมือถือ
-         หนาม/เศษ = polygon · สายฟ้า/กากบาท = เส้น (ความหนาคงที่ไม่ยืดตามจอ) · .dn = ห้อยลง · .up = พุ่งขึ้น · ไม่มีชิ้นไหนซ้อนกัน -->
-    <svg class="fl" viewBox="0 0 200 1000" preserveAspectRatio="none">
-      <g class="breathe s">
-        <polygon class="in dn" style="animation-delay:.04s" points="10,0 44,0 24,190" />
-        <polygon class="in dn" style="animation-delay:.14s" points="60,0 90,0 74,84" />
-        <polygon class="in dn" style="animation-delay:.22s" points="104,0 128,0 114,40" />
-        <polygon class="in" style="animation-delay:.10s" points="0,232 174,272 0,296" />
-        <polyline class="in bolt" style="animation-delay:.20s" points="0,372 114,388 72,404 180,440" />
-        <polygon class="in" style="animation-delay:.30s" points="0,520 200,548 0,560" />
-        <g class="flick">
-          <line class="in bolt" style="animation-delay:.40s" x1="24" y1="630" x2="128" y2="716" />
-          <line class="in bolt" style="animation-delay:.44s" x1="128" y1="630" x2="24" y2="716" />
-        </g>
-        <polygon class="in" style="animation-delay:.50s" points="0,790 140,818 92,856 0,866" />
-        <polygon class="in" style="animation-delay:.58s" points="0,904 120,930 0,946" />
-        <polygon class="in up" style="animation-delay:.64s" points="92,1000 106,960 120,1000" />
-        <polygon class="in up" style="animation-delay:.70s" points="136,1000 160,876 184,1000" />
-      </g>
-    </svg>
-    <svg class="fr" viewBox="0 0 200 1000" preserveAspectRatio="none">
-      <g class="breathe s">
-        <polygon class="in dn" style="animation-delay:.08s" points="190,0 156,0 176,170" />
-        <polygon class="in dn" style="animation-delay:.18s" points="140,0 112,0 128,70" />
-        <polygon class="in dn" style="animation-delay:.26s" points="98,0 76,0 88,34" />
-        <polygon class="in" style="animation-delay:.14s" points="200,210 30,250 200,270" />
-        <g class="flick flick-2">
-          <polyline class="in bolt" style="animation-delay:.24s" points="200,330 92,350 134,368 22,410" />
-        </g>
-        <polygon class="in" style="animation-delay:.34s" points="200,480 8,508 200,522" />
-        <line class="in bolt" style="animation-delay:.44s" x1="176" y1="600" x2="74" y2="686" />
-        <line class="in bolt" style="animation-delay:.48s" x1="74" y1="600" x2="176" y2="686" />
-        <polygon class="in" style="animation-delay:.54s" points="200,752 58,782 110,822 200,832" />
-        <polygon class="in" style="animation-delay:.62s" points="200,890 64,918 200,934" />
-        <g class="flick flick-3"><polygon class="in up" style="animation-delay:.68s" points="110,1000 96,962 82,1000" /></g>
-        <polygon class="in up" style="animation-delay:.72s" points="70,1000 46,872 22,1000" />
-      </g>
-    </svg>
+  <!-- ═══ อินโทรตอนเปิดเว็บ แบบตัวอย่างเกม eFootball 2022 (วินาทีที่ 0–8) · ตกแต่งเท่านั้น ═══
+       แถบเหลืองกวาดเข้า → วงแหวนวาดรอบถ้วยรางวัล → ชื่อลีก → แถบกวาดออกเข้าหน้าเว็บ (~2.9 วิ · แตะเพื่อข้าม)
+       เล่นครั้งแรกที่เปิดเว็บในแท็บนี้ (รีเฟรชไม่เล่นซ้ำ) · prefers-reduced-motion = ไม่เล่น · ไม่ใช้โลโก้ e ของ eFootball (เครื่องหมายการค้า) -->
+  <div class="fl-intro" id="fl-intro" aria-hidden="true">
+    <div class="sweep-in">
+      <div class="lane" style="--t:6%;--h:1.2vh;--x:8%;--w:52%;--d:.05s"><i></i></div>
+      <div class="lane" style="--t:14%;--h:3.6vh;--x:30%;--w:64%;--d:.12s"><i></i></div>
+      <div class="lane" style="--t:24%;--h:.8vh;--x:0%;--w:40%;--d:.2s"><i></i></div>
+      <div class="lane" style="--t:31%;--h:5vh;--x:40%;--w:58%;--d:.08s"><i></i></div>
+      <div class="lane" style="--t:44%;--h:1.4vh;--x:12%;--w:70%;--d:.26s"><i></i></div>
+      <div class="lane" style="--t:52%;--h:6.5vh;--x:0%;--w:46%;--d:.16s"><i></i></div>
+      <div class="lane" style="--t:63%;--h:.9vh;--x:36%;--w:60%;--d:.3s"><i></i></div>
+      <div class="lane" style="--t:70%;--h:4.2vh;--x:22%;--w:66%;--d:.1s"><i></i></div>
+      <div class="lane" style="--t:80%;--h:1.6vh;--x:50%;--w:44%;--d:.22s"><i></i></div>
+      <div class="lane" style="--t:88%;--h:3vh;--x:6%;--w:58%;--d:.34s"><i></i></div>
+    </div>
+    <div class="mark">
+      <svg class="fl-ring" viewBox="0 0 100 100"><circle cx="50" cy="50" r="38" /></svg>
+      <svg class="cup" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" />
+        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+      </svg>
+    </div>
+    <div class="word">FRIENDS LEAGUE</div>
+    <div class="sub">EFOOTBALL 2027 MOBILE</div>
+    <div class="sweep-out">
+      <div class="lane" style="--t:10%;--h:2.4vh;--x:20%;--w:60%;--d:2s"><i></i></div>
+      <div class="lane" style="--t:22%;--h:.8vh;--x:0%;--w:44%;--d:2.12s"><i></i></div>
+      <div class="lane" style="--t:36%;--h:5vh;--x:30%;--w:62%;--d:2.05s"><i></i></div>
+      <div class="lane" style="--t:50%;--h:1.2vh;--x:8%;--w:70%;--d:2.2s"><i></i></div>
+      <div class="lane" style="--t:61%;--h:6vh;--x:40%;--w:52%;--d:2.1s"><i></i></div>
+      <div class="lane" style="--t:74%;--h:1vh;--x:16%;--w:58%;--d:2.24s"><i></i></div>
+      <div class="lane" style="--t:86%;--h:3.4vh;--x:4%;--w:66%;--d:2.15s"><i></i></div>
+    </div>
   </div>
+  <script>
+    // เปิดแท็บนี้ครั้งแรก + เครื่องไม่ได้ตั้งลดการเคลื่อนไหว → เล่นอินโทร · จบหรือแตะ → ลบทิ้ง (data-intro บน <html> บอกว่าเกิดอะไรขึ้น)
+    (function () {
+      var el = document.getElementById("fl-intro"), seen = false;
+      try { seen = sessionStorage.getItem("fl_intro") === "1"; sessionStorage.setItem("fl_intro", "1"); } catch (e) {}
+      var still = !!window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var done = function () { if (el.parentNode) el.parentNode.removeChild(el); };
+      document.documentElement.setAttribute("data-intro", seen ? "seen" : still ? "still" : "play");
+      if (seen || still) return done();
+      el.className += " play";
+      el.addEventListener("click", done);
+      el.addEventListener("animationend", function (e) { if (e.target === el) done(); });
+      setTimeout(done, 4500);   // กันค้าง (เบราว์เซอร์ที่ไม่ส่ง animationend)
+    })();
+  </script>
+
+  <!-- ═══ แถบเหลืองวิ่งที่ขอบเว็บ แบบตัวอย่างเกม eFootball 2022 · ตกแต่งเท่านั้น ลอยอยู่หลังเนื้อหา ═══
+       สุ่มลายเองด้วยสคริปต์ข้างล่าง (makeBars): 8 แบบที่วาดมา + แถบล้วนไม่มีเส้นเฉียง 3 แบบ · เส้นเฉียง 45° ติดปลายแถบด้านใน · ฝั่งขวากลับด้านให้เอง
+       แต่ละข้างแบ่งเป็นช่องสูงไม่เท่ากัน (กลุ่มละช่อง → ไม่ซ้อนกัน) · ทุกครั้งที่กลุ่มถอยพ้นจอ สุ่มลายใหม่ (ลายไม่เบิ้ล: บนจอไม่มีแบบซ้ำกัน)
+       อยู่แค่ในขอบว่างข้างเนื้อหา (ความกว้างอยู่ใน style.css) · prefers-reduced-motion = ภาพนิ่ง (สุ่มครั้งเดียวตอนเปิด) -->
+  <div class="ef-stripes" aria-hidden="true"><div class="fl"></div><div class="fr"></div></div>
+  <script>
+      // แถบเหลืองที่ขอบ: สุ่มลายจากแบบที่วาดมา 8 แบบ + แถบล้วน (ไม่มีเส้นเฉียง) 3 แบบ · makeBars(กล่อง .ef-stripes, ขนาดขั้นต่ำ px) → ฟังก์ชันสร้างลาย
+      // พิกัดฝั่งซ้าย (x = 0 คือขอบจอ ปลายแถบอยู่ด้านใน) · ฝั่งขวากลับด้านให้เอง → แบบที่ 6 กับ 8 ในรูปคือแบบ 1 กับ 7 ที่กลับด้าน
+      // เส้นเฉียง 45° ติดปลายแถบด้านในเสมอ และอยู่ในช่วงความยาวของแถบ (ไม่ยื่นเลยปลาย) · แต่ละช่องมีลายเดียว → ไม่ซ้อนกัน · ลายไม่เบิ้ล (ดู draw)
+      function makeBars(root, PX) {
+        var R = Math.random, rnd = function (a, b) { return a + R() * (b - a); }, pick = function (a) { return a[Math.floor(R() * a.length)]; };
+        var r1 = function (v) { return Math.round(v * 10) / 10; }, SVGNS = "http://www.w3.org/2000/svg", SLOTS = 4;   // กลุ่มต่อข้าง (ขอบแคบได้ถึง 7 ดู build)
+        // ท่าเคลื่อน (keyframes ใน style.css): พุ่งเข้า-ค้าง-ถอย · ยืดออกจากขอบ · กระตุกเข้าแบบดิจิทัล
+        var MOTION = [["ef-bar", "cubic-bezier(.2, .9, .2, 1)"], ["ef-grow", "cubic-bezier(.2, .9, .2, 1)"], ["ef-step", "steps(1, end)"]];
+        // ความหนา = สัดส่วนของความกว้างแถบข้าง [ต่ำสุด, สูงสุด, อย่างน้อยกี่ px]: 0 บาง · 1 กลาง · 2 หนา · cap = หนาได้ไม่เกิน (ให้ลายพอดีช่อง)
+        var TIERS = [[.02, .05, 2], [.07, .15, 4], [.18, .34, 7]];
+        var thick = function (W, tier, cap) { var t = TIERS[tier]; return Math.max(t[2] * PX, Math.min(cap, W * rnd(t[0], t[1]))); };
+        // ขอบแคบ (กว้างไม่ถึง 40px เช่นมือถือ): แถบยาวเกือบเต็มขอบ (เว้นห่างเนื้อหาไว้นิด ไม่ดูติดกัน) · เส้นเฉียงพอดีที่ว่าง ไม่ล้นขอบจอ → ลายครบทุกชิ้น ไม่เป็นเศษ
+        var NARROW = false;
+        var len = function (W, a, b) { return W * (NARROW ? rnd(.75, .92) : rnd(a, b)); };
+        var sw = function (W, s) { return NARROW ? Math.min(s, W * .3) : s; };   // ความหนาเส้นเฉียง
+        var room = function (want, space, min) { return Math.max(Math.min(min, space), Math.min(want, space)); };   // อยากได้เท่านี้ (อย่างน้อย min) แต่ไม่เกินที่ว่าง
+        // เส้นแนวนอน: ติดขอบจอ = ด้านขอบตัดตรง (ยื่นเลยขอบไปซ่อน) ปลายด้านในมน · free = ไม่มีชิ้นอื่นอยู่ข้าง ๆ → กะพริบกระตุกได้
+        function bar(x, y, w, h, free) {
+          var e = x <= 0 ? h : 0;
+          return { svg: '<rect x="' + r1(x - e) + '" y="' + r1(y) + '" width="' + r1(w + e) + '" height="' + r1(h) + '" rx="' + r1(h / 2) + '"/>', right: x + w, bottom: y + h, free: free !== false };
+        }
+        // เส้นเฉียง: สี่เหลี่ยมด้านขนาน ด้านบน (xt → xt+s ที่ yt) · ด้านล่าง (xb → xb+s ที่ yb) · |xt−xb| = |yt−yb| = 45°
+        function slash(xt, yt, xb, yb, s, free) {
+          return { svg: '<polygon points="' + [xt, yt, xt + s, yt, xb + s, yb, xb, yb].map(r1).join(" ") + '"/>', right: Math.max(xt, xb) + s, bottom: yb, free: free !== false };
+        }
+        var KINDS = {
+          // แบบ 1 (และ 6): แถบ + เส้นเฉียงห้อยใต้ปลาย เอนกลับไปทางขอบจอ (ทรง 7)
+          seven: function (W, G, M) { var t = thick(W, 1 + Math.floor(R() * 2), (M - G) / 3.4), L = len(W, .5, .9), s = sw(W, Math.max(3 * PX, t * rnd(.6, 1.1))), d = L * rnd(0, NARROW ? .05 : .12);
+            var v = room(t * rnd(1.4, 3), L - d - s - W * .05, 8 * PX);
+            return [bar(0, 0, L, t), slash(L - d - s, t + G, L - d - s - v, t + G + v, s)]; },
+          // แบบ 2: เส้นบาง + ขีดเล็กห้อยใต้ปลาย
+          tickBelow: function (W, G, M) { var t = thick(W, 0, M / 6), L = len(W, .55, .95), s = sw(W, Math.max(2 * PX, t * rnd(1.2, 1.8))), v = room(t * rnd(2, 3.5), L - s, 4 * PX);
+            return [bar(0, 0, L, t), slash(L - s, t + G * .6, L - s - v, t + G * .6 + v, s)]; },
+          // แบบ 3: ขีดเล็กลงมาจรดปลายจากด้านบน + เส้นบาง
+          tickAbove: function (W, G, M) { var t = thick(W, 0, M / 6), L = len(W, .55, .95), s = sw(W, Math.max(2 * PX, t * rnd(1.2, 1.8))), v = room(t * rnd(2, 3.5), L - s, 4 * PX);
+            return [slash(L - s - v, 0, L - s, v, s), bar(0, v + G * .6, L, t)]; },
+          // แบบ 4 (=\): เส้นบนสั้น + เส้นเฉียงต่อจากปลายเส้นบน ลงไปจรดปลายเส้นล่าง (เส้นล่างยาวกว่า)
+          eqSlash: function (W, G, M) { var t1 = thick(W, Math.floor(R() * 2), (M - G) / 4), t2 = thick(W, 1 + Math.floor(R() * 2), (M - G) / 4), s = sw(W, Math.max(3 * PX, t1 * rnd(.8, 1.3)));
+            var v = Math.max(t1 + 4 * PX, Math.min(t1 * rnd(1.8, 3), M - G - t2)), L1 = W * rnd(.35, .6), X = W * (NARROW ? .92 : .97);
+            if (NARROW) v = t1 + 4 * PX;   // ขอบแคบ: เส้นเฉียงสั้นสุด เหลือที่ให้เส้นบน
+            var L2 = L1 + G + v + s;
+            if (L2 > X) { L1 = Math.max(W * .15, L1 - (L2 - X)); L2 = L1 + G + v + s; }
+            if (L2 > X) { v = Math.max(4 * PX, X - L1 - G - s); L2 = L1 + G + v + s; }
+            return [bar(0, 0, L1, t1, false), slash(L1 + G, 0, L1 + G + v, v, s, false), bar(0, v + G, L2, t2)]; },
+          // แบบ 5: แถบล่างหนา + เส้นเฉียงชี้ขึ้นจากปลายแถบล่าง เอนกลับไปทางขอบจอ ผ่านปลายเส้นบนที่สั้นกว่า
+          riseBack: function (W, G, M) { var t2 = thick(W, 1 + Math.floor(R() * 2), (M - G) / 3.4), t1 = thick(W, 0, t2 * .6), s = sw(W, Math.max(3 * PX, t2 * rnd(.5, .8)));
+            var L2 = len(W, .6, .95), H = room(t2 * rnd(1.8, 2.8), L2 - s - W * .1, 10 * PX);
+            var y1 = Math.max(0, (H - t1) * rnd(.5, .75)), L1 = L2 - s - (H - y1) - G, p = [slash(L2 - s - H, 0, L2 - s, H, s, false)];
+            if (L1 > W * (NARROW ? .25 : .15)) p.push(bar(0, y1, L1, t1, false));
+            p.push(bar(0, H + G, L2, t2));
+            return p; },
+          // แบบ 7 (และ 8): เส้นเฉียงลงมาจรดปลายเส้นฐานจากด้านบน
+          landBack: function (W, G, M) { var t = thick(W, 1 + Math.floor(R() * 2), (M - G) / 3.4), Lb = len(W, .55, 1), s = sw(W, Math.max(3 * PX, t * rnd(.6, .9)));
+            var v = room(t * rnd(1.4, 2.6), Lb - s - W * .05, 8 * PX);
+            return [slash(Lb - s - v, 0, Lb - s, v, s), bar(0, v + G, Lb, t)]; },
+          // ── แถบล้วน ไม่มีเส้นเฉียง ──
+          // แถบเดียวหนา ๆ
+          solo: function (W, G, M) { return [bar(0, 0, len(W, .5, .95), thick(W, 1 + Math.floor(R() * 2), (M - G) / 3.4))]; },
+          // 2 เส้นซ้อน ยาวไม่เท่ากัน หนาไม่เท่ากัน (สุ่มว่าเส้นสั้นหรือเส้นยาวอยู่บน)
+          twin: function (W, G, M) { var c = (M - G) / 3, a = thick(W, Math.floor(R() * 2), c), b = thick(W, 1 + Math.floor(R() * 2), c), S = W * rnd(NARROW ? .5 : .35, .6), L = Math.min(W * (NARROW ? .92 : .97), S + W * rnd(.18, .35));
+            if (R() < .5) { var x = a; a = b; b = x; }
+            return R() < .5 ? [bar(0, 0, S, a), bar(0, a + G, L, b)] : [bar(0, 0, L, a), bar(0, a + G, S, b)]; },
+          // 3 เส้นเรียงเป็นขั้นบันได (ยาวขึ้นหรือสั้นลงทีละขั้น)
+          steps: function (W, G, M) { var t = thick(W, Math.floor(R() * 2), (M - 2 * G) / 5), L = W * (NARROW ? rnd(.4, .48) : rnd(.3, .45)), d = W * (NARROW ? rnd(.15, .21) : rnd(.12, .2)), up = R() < .5, p = [];
+            for (var i = 0; i < 3; i++) p.push(bar(0, i * (t + G), L + (up ? i : 2 - i) * d, t));
+            return p; },
+        };
+        // ไม่ให้ลายเบิ้ล: ฝั่งเดียวกันห้ามได้แบบเดียวกัน (เสมอ) แล้วเลือกตามลำดับ: เปลี่ยนแบบ + ไม่มีในอีกฝั่งเลย (จอใหญ่ 9 แบบ · 8 กลุ่ม → ทั้งจอไม่ซ้ำ)
+        // → ขอบแคบมีกลุ่มมากกว่า: อย่างน้อยไม่ตรงกับอีกฝั่งที่ระดับเดียวกัน (ดูเป็นภาพสะท้อน) → ค่อยยอมให้ช่องนี้ได้แบบเดิม (ลายสุ่มใหม่อยู่ดี)
+        var NAMES = Object.keys(KINDS);
+        function draw(own, same, other, close) {
+          var base = NAMES.filter(function (k) { return same.indexOf(k) < 0; });
+          var tries = [
+            function (k) { return k !== own && other.indexOf(k) < 0; },
+            function (k) { return k !== own && close.indexOf(k) < 0; },
+            function (k) { return close.indexOf(k) < 0; },
+            function (k) { return k !== own; },
+          ];
+          for (var i = 0; i < tries.length; i++) { var c = base.filter(tries[i]); if (c.length) return pick(c); }
+          return pick(base.length ? base : NAMES);
+        }
+        // วาดลายใหม่ให้กลุ่ม · สูงเกินช่อง → ย่อทั้งลาย · บางชิ้นกะพริบ (เฉพาะชิ้นที่ไม่มีชิ้นอื่นข้าง ๆ และยาวไม่เกิน 72% → กระตุกแล้วไม่ชนกัน ไม่ออกนอกขอบว่าง)
+        function fill(g, side, W, slotH, near) {
+          NARROW = W < 40 * PX;
+          var M = slotH * .85, G = Math.max(3 * PX, Math.round(W * rnd(.03, .07))), kind = draw(g.__k, near[0], near[1], near[2]), parts = KINDS[kind](W, G, M), h = 1;
+          g.__k = kind;
+          parts.forEach(function (p) { h = Math.max(h, p.bottom); });
+          var k = h > M ? M / h : 1, H = Math.ceil(h * k);
+          var body = parts.map(function (p) {
+            return p.free && p.right * k <= W * .72 && R() < .3 ? p.svg.replace(/^<(\w+)/, '<$1 class="gl" style="--gd:' + rnd(0, 3).toFixed(2) + 's"') : p.svg;
+          }).join("");
+          var tf = (side === "fr" ? "translate(" + W + " 0) scale(-1 1) " : "") + (k < 1 ? "scale(" + k.toFixed(3) + ")" : "");
+          g.setAttribute("width", W); g.setAttribute("height", H); g.setAttribute("viewBox", "0 0 " + W + " " + H);
+          g.style.top = Math.round(R() * Math.max(0, slotH - H)) + "px";
+          g.innerHTML = "<g" + (tf ? ' transform="' + tf + '"' : "") + ">" + body + "</g>";
+        }
+        return function build() {
+          var all = { fl: [], fr: [] };
+          var kindsOf = function (list, skip) { return list.filter(function (x) { return x !== skip; }).map(function (x) { return x.__k; }); };
+          ["fl", "fr"].forEach(function (side) {
+            var strip = root.querySelector("." + side), W = strip.offsetWidth, total = strip.offsetHeight, wts = [], sum = 0, top = 0, gs = all[side];
+            var n = W < 40 * PX ? Math.max(SLOTS, Math.min(7, Math.round(total / (100 * PX)))) : SLOTS;   // ขอบแคบ (มือถือ) → กลุ่มถี่ขึ้น ขอบดูเต็ม
+            for (var i = 0; i < n; i++) { wts.push(rnd(.6, 1.6)); sum += wts[i]; }   // ช่องสูงไม่เท่ากัน (ช่องสูง = ลายใหญ่)
+            strip.innerHTML = "";
+            wts.forEach(function (wt) {
+              var slotH = total * wt / sum, slot = document.createElement("div"), g = document.createElementNS(SVGNS, "svg"), m = pick(MOTION), dur = 5 + R() * 4;
+              var near = function () {   // [แบบในฝั่งเดียวกัน, แบบในอีกฝั่ง, แบบในอีกฝั่งที่ระดับใกล้กัน]
+                var o = all[side === "fl" ? "fr" : "fl"];
+                return [kindsOf(gs, g), kindsOf(o, null), kindsOf(o.filter(function (x) { return x.__y0 < g.__y1 + 60 * PX && x.__y1 > g.__y0 - 60 * PX; }), null)];
+              };
+              g.__y0 = top; g.__y1 = top + slotH;
+              slot.className = "slot"; slot.style.top = Math.round(top) + "px"; top += slotH;
+              g.setAttribute("class", "g");
+              g.style.animation = m[0] + "-" + side.slice(1) + " " + dur.toFixed(2) + "s " + m[1] + " " + (-R() * dur).toFixed(2) + "s infinite both";
+              gs.push(g);
+              fill(g, side, W, slotH, near());
+              g.addEventListener("animationiteration", function (e) { if (e.target === g) fill(g, side, W, slotH, near()); });   // พ้นจอแล้ว → ลายใหม่
+              slot.appendChild(g); strip.appendChild(slot);
+            });
+          });
+        };
+      }
+      (function () {
+        var root = document.querySelector(".ef-stripes");
+        if (!root) return;
+        var build = makeBars(root, 1), wait;
+        build();
+        window.addEventListener("resize", function () { clearTimeout(wait); wait = setTimeout(build, 300); });
+      })();
+    </script>
 
   <div id="root">
     <div class="boot">
