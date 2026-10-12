@@ -47,7 +47,13 @@ const P = {
   copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   phone:'<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
   iosShare:'<path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M8 11H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-2"/>',
-  dots:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'
+  dots:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
+  minus:'<path d="M5 12h14"/>',
+  camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
+  smile:'<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>',
+  type:'<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+  layers:'<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
+  undo:'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>'
 };
 
 const Ic = ({ n, size = 16, className = "" }) => (
@@ -2908,6 +2914,546 @@ function InstallModal({ prompt, onUsed, onClose }) {
   );
 }
 
+/* ══════════════════════════ MOMENTS (ผนังรูปแบบสมุดภาพ · แบบ wall ในแอป Yope) ══════════════════════════
+   แต่ละชิ้นบนผนัง = moments/{id} (ออนไลน์) หรือ fl_moments (เครื่องเดียว): รูป · สติกเกอร์ · ข้อความ · ลายเส้น
+   พิกัดเป็นหน่วยผนัง (ผนังกว้าง 1000 หน่วยเสมอ → ทุกจอเห็นตำแหน่งเดียวกัน แค่ย่อขยายตามความกว้าง)
+   x, y = จุดกึ่งกลาง · w = ความกว้าง (ข้อความ = ขนาดตัวอักษร) · rot = องศา · z = ลำดับซ้อน (มาก = อยู่บน)
+   คนที่มีบัญชีในลีกลงได้ · ย้าย/หมุน/ย่อขยาย/ลบได้เฉพาะของตัวเอง · แอดมินจัดการได้ทุกชิ้น · คนที่ไม่ได้ล็อกอินดูอย่างเดียว */
+const WALL_W = 1000, WALL_MIN_H = 700, WALL_MAX_H = 20000;
+const MOMENT_KINDS = ["photo", "sticker", "text", "draw"];
+const INK = { yellow: "#FFDE2E", white: "#FFFFFF", cyan: "#5BE3FF", pink: "#FF5C8A", green: "#3BE39B", orange: "#FF9F1C" };
+const INK_NAME = { yellow: "เหลือง", white: "ขาว", cyan: "ฟ้า", pink: "ชมพู", green: "เขียว", orange: "ส้ม" };
+const clampN = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const wallRand = (a, b) => Math.round(a + Math.random() * (b - a));
+const topZOf = list => list.reduce((z, m) => Math.max(z, m.z || 0), 0);
+
+// รูปบนผนัง → JPEG ด้านยาวสุด 1000px · ใหญ่เกินที่กฎรับ (400KB) → ลดคุณภาพ/ขนาดลงจนพอดี
+async function makeMomentImage(file) {
+  for (const [max, q] of [[1000, .8], [1000, .68], [800, .66], [640, .6]]) {
+    const { c, g, img, w, h } = await drawUpload(file, (W, H) => Math.min(1, max / Math.max(W, H)));
+    g.fillStyle = "#0B1C4A"; g.fillRect(0, 0, w, h);
+    g.drawImage(img, 0, 0, w, h);
+    const data = c.toDataURL("image/jpeg", q);
+    if (data.length < 390000) return { data, ar: Math.round(h / w * 1000) / 1000 };
+  }
+  throw new Error("รูปนี้ใหญ่เกินไป");
+}
+
+// สติกเกอร์วาดเอง (ไม่ใช้อีโมจิ → ทุกเครื่องหน้าตาเหมือนกัน · สีเรียบ ไม่มี gradient → ไม่มี id ซ้ำกันในหน้า) · ar = สูง ÷ กว้าง
+const burst = (cx, cy, ro, ri, n, turn = -90) => Array.from({ length: n * 2 }, (_, i) => {
+  const a = (Math.PI * i / n) + turn * Math.PI / 180, r = i % 2 ? ri : ro;
+  return (cx + r * Math.cos(a)).toFixed(1) + "," + (cy + r * Math.sin(a)).toFixed(1);
+}).join(" ");
+const pentagon = (cx, cy, r, turn = -90) => Array.from({ length: 5 }, (_, i) => {
+  const a = (i * 72 + turn) * Math.PI / 180;
+  return (cx + r * Math.cos(a)).toFixed(1) + "," + (cy + r * Math.sin(a)).toFixed(1);
+}).join(" ");
+const ST = { fontFamily: "Kanit, sans-serif", fontWeight: 800, fontStyle: "italic" };
+const BALL_PATCHES = [0, 1, 2, 3, 4].map(i => { const a = (i * 72 - 90) * Math.PI / 180; return [50 + 32 * Math.cos(a), 50 + 32 * Math.sin(a)]; });
+const STICKERS = {
+  goal: { label: "GOAL!", ar: 100 / 130, el: (
+    <svg viewBox="0 0 130 100" aria-hidden="true">
+      <polygon points={burst(65, 50, 63, 46, 14)} fill="#FF5C1F" />
+      <polygon points={burst(65, 50, 54, 39, 14, -77)} fill="#FFDE2E" />
+      <text x="65" y="61" textAnchor="middle" fontSize="30" fill="#1A1000" style={ST}>GOAL!</text>
+    </svg>) },
+  trophy: { label: "ถ้วยรางวัล", ar: 1, el: (
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <path d="M30 20 C12 20 12 44 31 42" fill="none" stroke="#E0A800" strokeWidth="6" strokeLinecap="round" />
+      <path d="M70 20 C88 20 88 44 69 42" fill="none" stroke="#E0A800" strokeWidth="6" strokeLinecap="round" />
+      <path d="M28 12 H72 V34 A22 22 0 0 1 28 34 Z" fill="#FFD23F" stroke="#B8860B" strokeWidth="2.5" />
+      <path d="M36 19 V33 A14 14 0 0 0 42 45" fill="none" stroke="#FFF3A6" strokeWidth="4" strokeLinecap="round" />
+      <rect x="44" y="55" width="12" height="14" fill="#E0A800" />
+      <rect x="31" y="68" width="38" height="9" rx="2" fill="#FFD23F" stroke="#B8860B" strokeWidth="2" />
+      <rect x="25" y="77" width="50" height="12" rx="3" fill="#8A5A00" />
+    </svg>) },
+  ball: { label: "ลูกบอล", ar: 1, el: (
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="45" fill="#FFFFFF" stroke="#0B1C4A" strokeWidth="3" />
+      {BALL_PATCHES.map(([x, y], i) => <line key={i} x1="50" y1="50" x2={x} y2={y} stroke="#1B1B1B" strokeWidth="2.5" />)}
+      <polygon points={pentagon(50, 50, 14)} fill="#1B1B1B" />
+      {BALL_PATCHES.map(([x, y], i) => <polygon key={"p" + i} points={pentagon(x, y, 9, i * 72 + 90)} fill="#1B1B1B" />)}
+      <path d="M24 30 A32 32 0 0 1 40 17" fill="none" stroke="#DCE6F8" strokeWidth="5" strokeLinecap="round" />
+    </svg>) },
+  fire: { label: "ไฟลุก", ar: 100 / 80, el: (
+    <svg viewBox="0 0 80 100" aria-hidden="true">
+      <path d="M40 4 C44 22 62 30 64 54 C66 78 54 96 40 96 C25 96 14 82 15 64 C16 50 24 42 27 30 C32 40 35 44 39 46 C41 32 38 18 40 4 Z" fill="#FF4D2E" />
+      <path d="M40 40 C44 52 54 58 54 72 C54 86 47 92 40 92 C32 92 26 86 26 76 C26 66 32 62 34 54 C37 60 39 62 41 63 C42 56 40 48 40 40 Z" fill="#FFB020" />
+      <path d="M40 64 C43 70 47 74 47 81 C47 87 44 90 40 90 C36 90 33 87 33 82 C33 77 36 74 37 70 C38 72 39 73 40 73 Z" fill="#FFF08A" />
+    </svg>) },
+  star: { label: "ดาว", ar: 1, el: (
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <polygon points={burst(50, 54, 46, 19, 5)} fill="#FFD23F" stroke="#B8860B" strokeWidth="3" strokeLinejoin="round" />
+      <path d="M40 34 L46 20" stroke="#FFF3A6" strokeWidth="5" strokeLinecap="round" />
+    </svg>) },
+  mvp: { label: "MVP", ar: 84 / 120, el: (
+    <svg viewBox="0 0 120 84" aria-hidden="true">
+      <path d="M30 50 L18 82 L32 74 L40 84 L50 54 Z" fill="#B3122E" />
+      <path d="M90 50 L102 82 L88 74 L80 84 L70 54 Z" fill="#E03250" />
+      <rect x="8" y="6" width="104" height="54" rx="14" fill="#FFD23F" stroke="#B8860B" strokeWidth="3" />
+      <rect x="15" y="12" width="90" height="42" rx="10" fill="none" stroke="#FFF3A6" strokeWidth="2" />
+      <text x="60" y="47" textAnchor="middle" fontSize="34" fill="#3A2600" style={ST}>MVP</text>
+    </svg>) },
+  gg: { label: "GG", ar: 90 / 110, el: (
+    <svg viewBox="0 0 110 90" aria-hidden="true">
+      <path d="M14 6 H96 A10 10 0 0 1 106 16 V56 A10 10 0 0 1 96 66 H46 L24 86 L28 66 H14 A10 10 0 0 1 4 56 V16 A10 10 0 0 1 14 6 Z" fill="#FFFFFF" stroke="#081896" strokeWidth="3" strokeLinejoin="round" />
+      <text x="55" y="50" textAnchor="middle" fontSize="36" fill="#081896" style={ST}>GG</text>
+    </svg>) },
+  bolt: { label: "สายฟ้า", ar: 100 / 70, el: (
+    <svg viewBox="0 0 70 100" aria-hidden="true">
+      <polygon points="44,3 8,58 32,58 24,97 62,36 38,36 50,3" fill="#FFDE2E" stroke="#1A1000" strokeWidth="3" strokeLinejoin="round" />
+    </svg>) },
+  crown: { label: "มงกุฎ", ar: 84 / 110, el: (
+    <svg viewBox="0 0 110 84" aria-hidden="true">
+      <path d="M12 72 L5 20 L32 42 L55 6 L78 42 L105 20 L98 72 Z" fill="#FFD23F" stroke="#B8860B" strokeWidth="3" strokeLinejoin="round" />
+      <rect x="10" y="68" width="90" height="12" rx="3" fill="#E0A800" />
+      <circle cx="55" cy="50" r="7" fill="#E03250" /><circle cx="31" cy="57" r="5" fill="#2E8BFF" /><circle cx="79" cy="57" r="5" fill="#3BE39B" />
+    </svg>) },
+  win: { label: "WIN!", ar: 70 / 150, el: (
+    <svg viewBox="0 0 150 70" aria-hidden="true">
+      <path d="M4 16 H24 V58 H4 L13 37 Z" fill="#9E1530" />
+      <path d="M146 16 H126 V58 H146 L137 37 Z" fill="#9E1530" />
+      <rect x="18" y="6" width="114" height="52" rx="6" fill="#E8283C" />
+      <text x="75" y="45" textAnchor="middle" fontSize="34" fill="#FFFFFF" style={ST}>WIN!</text>
+    </svg>) },
+  heart: { label: "หัวใจ", ar: 90 / 100, el: (
+    <svg viewBox="0 0 100 90" aria-hidden="true">
+      <path d="M50 86 C20 64 4 46 4 28 C4 14 15 4 28 4 C38 4 46 10 50 18 C54 10 62 4 72 4 C85 4 96 14 96 28 C96 46 80 64 50 86 Z" fill="#FF3D6E" stroke="#B0103A" strokeWidth="3" />
+      <path d="M20 26 C21 19 26 15 32 14" fill="none" stroke="#FFC2D2" strokeWidth="5" strokeLinecap="round" />
+    </svg>) },
+  hundred: { label: "100", ar: 86 / 130, el: (
+    <svg viewBox="0 0 130 86" aria-hidden="true">
+      <text x="64" y="58" textAnchor="middle" fontSize="58" fill="#E8283C" style={ST}>100</text>
+      <path d="M14 67 H114" stroke="#E8283C" strokeWidth="6" strokeLinecap="round" />
+      <path d="M24 79 H104" stroke="#E8283C" strokeWidth="6" strokeLinecap="round" />
+    </svg>) },
+  wow: { label: "สุดยอด!", ar: 100 / 150, el: (
+    <svg viewBox="0 0 150 100" aria-hidden="true">
+      <polygon points={burst(75, 50, 72, 52, 16)} fill="#081896" />
+      <polygon points={burst(75, 50, 64, 46, 16, -79)} fill="#5BE3FF" />
+      <text x="75" y="62" textAnchor="middle" fontSize="31" fill="#081896" style={ST}>สุดยอด!</text>
+    </svg>) },
+};
+
+// ความสูงโดยประมาณของชิ้น (หน่วยผนัง) → ผนังสูงพอให้ทุกชิ้นอยู่ในกรอบ
+const momentH = m => m.kind === "photo" ? m.w * (0.9 * (m.ar || 1) + 0.2)
+  : m.kind === "text" ? m.w * 1.4 * Math.max(1, String(m.t || "").split("\n").length)
+  : m.kind === "draw" ? m.w * (m.vh || 1) / (m.vw || 1)
+  : m.w * ((STICKERS[m.s] || {}).ar || 1);
+
+// ตรวจข้อมูลชิ้นบนผนัง (จากไฟล์ Import / ย้ายขึ้นออนไลน์) · ช่องที่ไม่รู้จักทิ้งไป · ข้อมูลผิดรูปแบบ = ไม่รับ
+const cleanMoment = m => {
+  if (!m || typeof m !== "object" || !MOMENT_KINDS.includes(m.kind)) return null;
+  const n = (v, lo, hi, d) => typeof v === "number" && isFinite(v) ? clampN(v, lo, hi) : d;
+  const o = { id: n(m.id, 1, Number.MAX_SAFE_INTEGER, 0) || uniqueId(), kind: m.kind,
+    x: n(m.x, 0, WALL_W, WALL_W / 2), y: n(m.y, 0, WALL_MAX_H, 300), w: n(m.w, 8, 1200, 200), rot: n(m.rot, -180, 180, 0), z: n(m.z, 0, 1e9, 1),
+    by: String(m.by || ""), byName: String(m.byName || "").slice(0, 40), at: n(m.at, 0, 9e15, Date.now()) };
+  if (m.kind === "photo") {
+    if (!IMG_ID_RE.test(m.img || "")) return null;
+    Object.assign(o, { img: m.img, ar: n(m.ar, .1, 10, 1), cap: String(m.cap || "").slice(0, 60) });
+  } else if (m.kind === "sticker") {
+    if (!STICKERS[m.s]) return null;
+    o.s = m.s;
+  } else if (m.kind === "text") {
+    o.t = String(m.t || "").slice(0, 80); o.c = INK[m.c] ? m.c : "yellow";
+    if (!o.t.trim()) return null;
+  } else {
+    if (typeof m.d !== "string" || !m.d || m.d.length > 30000 || !/^[ML0-9 .]+$/.test(m.d)) return null;
+    Object.assign(o, { d: m.d, vw: n(m.vw, 1, 5000, 100), vh: n(m.vh, 1, 5000, 100), c: INK[m.c] ? m.c : "yellow", sw: n(m.sw, 1, 60, 8) });
+  }
+  return o;
+};
+
+// ชิ้นบนผนัง · s = px ต่อหน่วยผนัง · mine = เป็นของฉัน (ลากได้) · sel = เลือกอยู่ (มีจุดจับหมุน / ย่อขยาย / ลบ)
+// api = ตัวจัดการจาก MomentsTab (อ้างผ่าน ref เสมอ → ไม่ต้องวาดชิ้นใหม่ทุกครั้งที่ผนังเปลี่ยน)
+const WallItem = React.memo(function WallItem({ m, s, src, sel, mine, api }) {
+  const isPhoto = m.kind === "photo", act = mine || isPhoto;
+  const label = isPhoto ? "รูป" + (m.cap ? " " + m.cap : "") + " · โดย " + (m.byName || "—")
+    : m.kind === "sticker" ? "สติกเกอร์ " + ((STICKERS[m.s] || {}).label || "")
+    : m.kind === "text" ? "ข้อความ " + m.t : "ลายเส้นของ " + (m.byName || "—");
+  let body;
+  if (isPhoto) body = (
+    <div className="fl-polaroid">
+      {src ? <img src={src} alt="" draggable={false} style={{ aspectRatio: 1 / (m.ar || 1) }} />
+        : <div className="fl-polaroid-wait" style={{ aspectRatio: 1 / (m.ar || 1) }} />}
+      <div className="fl-polaroid-cap" style={{ fontSize: Math.max(7, m.w * s * 0.068) }}>{m.cap || " "}</div>
+    </div>
+  );
+  else if (m.kind === "sticker") body = <div className="fl-sticker">{(STICKERS[m.s] || STICKERS.star).el}</div>;
+  else if (m.kind === "text") body = <div className="fl-wall-text" style={{ fontSize: m.w * s, color: INK[m.c] || INK.yellow }}>{m.t}</div>;
+  else body = (
+    <svg viewBox={"0 0 " + m.vw + " " + m.vh} className="block h-auto w-full overflow-visible" aria-hidden="true">
+      <path d={m.d} fill="none" stroke={INK[m.c] || INK.yellow} strokeWidth={m.sw} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+  return (
+    <div role={act ? "button" : "img"} tabIndex={act ? 0 : -1} aria-label={label + (mine ? " · ลากเพื่อย้าย" : "")}
+      data-mid={m.id} className={"fl-wall-item" + (mine ? " fl-mine" : "") + (sel ? " fl-sel" : "")}
+      style={{ left: m.x * s, top: m.y * s, zIndex: m.z || 1, width: m.kind === "text" ? "max-content" : m.w * s,
+        transform: "translate(-50%, -50%) rotate(" + (m.rot || 0) + "deg)" }}
+      onPointerDown={e => api.down(e, m, "move")} onClick={() => api.tap(m)} onDoubleClick={() => isPhoto && api.open(m)}
+      onKeyDown={e => api.key(e, m)} onFocus={() => mine && api.pick(m)}>
+      {body}
+      {sel && mine && (<>
+        <span className="fl-sel-box" aria-hidden="true" />
+        <span className="fl-handle fl-h-rot" title="หมุน" onPointerDown={e => api.down(e, m, "rot")}><Ic n="refresh" size={13} /></span>
+        <span className="fl-handle fl-h-size" title="ย่อ / ขยาย" onPointerDown={e => api.down(e, m, "size")} />
+        <button type="button" className="fl-handle fl-h-del" aria-label="ลบชิ้นนี้" onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); api.remove(m); }}><Ic n="x" size={13} /></button>
+      </>)}
+    </div>
+  );
+}, (a, b) => a.m === b.m && a.s === b.s && a.src === b.src && a.sel === b.sel && a.mine === b.mine);
+
+const InkPicker = ({ value, onChange, small = false }) => (
+  <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="เลือกสี">
+    {Object.keys(INK).map(k => (
+      <button key={k} type="button" role="radio" aria-checked={value === k} aria-label={"สี" + INK_NAME[k]} onClick={() => onChange(k)}
+        className={"shrink-0 rounded-full ring-2 transition " + (small ? "h-7 w-7 " : "h-8 w-8 ") + (value === k ? "scale-110 ring-white" : "ring-black/40")}
+        style={{ background: INK[k] }} />
+    ))}
+  </div>
+);
+
+function StickerPicker({ onPick, onClose }) {
+  return (
+    <Modal onClose={onClose} className="max-w-md">
+      <ModalHead kicker="Moments" title="เลือกสติกเกอร์" onClose={onClose} />
+      <div className="grid grid-cols-4 gap-2">
+        {Object.entries(STICKERS).map(([k, v]) => (
+          <button key={k} type="button" onClick={() => onPick(k)} aria-label={"สติกเกอร์ " + v.label}
+            className="grid aspect-square place-items-center rounded-xl bg-page p-2.5 ring-1 ring-line/15 transition hover:ring-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <span className="fl-sticker block w-full">{v.el}</span>
+          </button>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+// ข้อความบนผนัง (เพิ่มใหม่ / แก้) · คำบรรยายใต้รูปใช้หน้าต่างเดียวกัน (caption = true → ไม่มีสี)
+function TextModal({ init, caption = false, onSave, onClose }) {
+  const max = caption ? 60 : 80;
+  const [t, setT] = useState(init.t || ""), [c, setC] = useState(init.c || "yellow");
+  const ok = caption || t.trim().length > 0;
+  return (
+    <Modal onClose={onClose}>
+      <ModalHead kicker="Moments" title={caption ? "คำบรรยายใต้รูป" : init.edit ? "แก้ข้อความ" : "เพิ่มข้อความ"} onClose={onClose} />
+      <form onSubmit={e => { e.preventDefault(); if (ok) onSave(t.trim(), c); }} className="space-y-4">
+        <Field label={(caption ? "คำบรรยาย" : "ข้อความ") + " (ไม่เกิน " + max + " ตัวอักษร" + (caption ? " · เว้นว่างได้" : " · ขึ้นบรรทัดใหม่ได้") + ")"}>
+          <textarea value={t} onChange={e => setT(e.target.value.slice(0, max))} rows={2} autoFocus
+            placeholder={caption ? "เช่น นัดชิงซีซั่น 1" : "เช่น แชมป์ซีซั่น 1!"} className={INPUT + " resize-none"} />
+        </Field>
+        {!caption && <InkPicker value={c} onChange={setC} />}
+        {!caption && <div className="fl-wall-text rounded-lg bg-page px-3 py-4 text-center text-2xl" style={{ color: INK[c] }}>{t || "ตัวอย่าง"}</div>}
+        <div className="flex justify-end gap-2">
+          <Btn onClick={onClose}>ยกเลิก</Btn>
+          <Btn variant="primary" type="submit" disabled={!ok}>{caption || init.edit ? "บันทึก" : "วางบนผนัง"}</Btn>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function MomentView({ m, src, onClose }) {
+  return (
+    <Modal onClose={onClose} className="max-w-3xl">
+      <ModalHead kicker="Moments" title={m.cap || "รูปบนผนัง"} onClose={onClose} />
+      {src ? <img src={src} alt={m.cap || "รูปบนผนัง Moments"} className="mx-auto block max-h-[70vh] w-auto max-w-full rounded-lg ring-1 ring-line/20" />
+        : <p className="py-12 text-center text-sm text-muted">กำลังโหลดรูป…</p>}
+      <p className="mt-3 text-xs text-muted">ลงโดย {m.byName || "—"} · {new Date(m.at || Date.now()).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}</p>
+    </Modal>
+  );
+}
+
+function MomentsTab({ moments, setMoments, user, isAdmin, err }) {
+  const { images, putImage } = useContext(ImgContext);
+  const wrapRef = useRef(null), boardRef = useRef(null), fileRef = useRef(null);
+  const [cw, setCw] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const [sel, setSel] = useState(null);
+  const [draft, setDraftState] = useState(null);   // ค่าระหว่างลาก/หมุน/ย่อขยาย (ยังไม่บันทึก) { id, x?, y?, w?, rot? }
+  const draftRef = useRef(null);
+  const setDraft = d => { draftRef.current = d; setDraftState(d); };
+  const gest = useRef(null), stroke = useRef(null);
+  const [busy, setBusy] = useState(0);              // จำนวนรูปที่กำลังลง
+  const [picker, setPicker] = useState(false);
+  const [textBox, setTextBox] = useState(null);     // { t, c, edit?, id? } · caption: true = คำบรรยายรูป
+  const [view, setView] = useState(null);
+  const [drawing, setDrawing] = useState(null);     // null = ไม่ได้วาด · { strokes: [{ pts, c, sw }], live, c, sw }
+  const canPost = !!user && !err;
+  const mine = m => canPost && (isAdmin || m.by === user.id);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const fit = () => setCw(el.clientWidth);
+    fit();
+    if (!window.ResizeObserver) { window.addEventListener("resize", fit); return () => window.removeEventListener("resize", fit); }
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const s = (cw || WALL_W) / WALL_W * zoom;
+
+  const items = useMemo(() => moments.map(m => draft && draft.id === m.id ? { ...m, ...draft } : m)
+    .sort((a, b) => (a.z || 0) - (b.z || 0) || a.id - b.id), [moments, draft]);
+  const H = Math.min(WALL_MAX_H, Math.max(WALL_MIN_H, ...items.map(m => m.y + momentH(m) / 2 + 140)));
+  const selItem = sel != null ? moments.find(m => m.id === sel) : null;
+  useEffect(() => { if (sel != null && !selItem) setSel(null); }, [selItem, sel]);   // ถูกลบไปแล้ว (อาจจากเครื่องอื่น)
+
+  const update = (id, patch) => setMoments(ms => ms.map(m => m.id === id ? { ...m, ...patch } : m));
+  const remove = m => {
+    if (!mine(m) || !confirm(m.kind === "photo" ? "เอารูปนี้ออกจากผนัง?" : "ลบชิ้นนี้ออกจากผนัง?")) return;
+    setMoments(ms => ms.filter(x => x.id !== m.id));
+    setSel(null);
+  };
+  const toFront = m => setMoments(ms => { const top = topZOf(ms); return ms.map(x => x.id === m.id && (x.z || 0) < top ? { ...x, z: top + 1 } : x); });
+
+  // ชิ้นใหม่วางแบบสุ่มทั่วส่วนของผนังที่เห็นอยู่บนจอ (ไม่กองรวมกันตรงกลาง)
+  const spot = () => {
+    const wr = wrapRef.current, bd = boardRef.current;
+    if (!wr || !bd) return { x: WALL_W / 2, y: 300 };
+    const r = bd.getBoundingClientRect();
+    let y0 = Math.max(0, -r.top) / s, y1 = Math.min(r.height, innerHeight - r.top) / s;
+    if (y1 - y0 < 150) { y0 = 0; y1 = Math.min(H, 600); }
+    const x0 = wr.scrollLeft / s, x1 = (wr.scrollLeft + wr.clientWidth) / s;
+    return { x: clampN(Math.round(x0 + (x1 - x0) * (.15 + Math.random() * .7)), 80, WALL_W - 80),
+             y: clampN(Math.round(y0 + (y1 - y0) * (.22 + Math.random() * .56)), 120, WALL_MAX_H - 300) };
+  };
+  const place = parts => {   // ชิ้นใหม่ (หลายชิ้นได้) → อยู่บนสุดเสมอ
+    const at = Date.now(), byName = (user.name || user.username || "").slice(0, 40);
+    setMoments(ms => {
+      let z = topZOf(ms);
+      return [...ms, ...parts.map(p => ({ id: uniqueId(), by: user.id, byName, at, rot: 0, ...p, z: ++z }))];
+    });
+  };
+
+  const addPhotos = async files => {
+    for (const f of files) {
+      setBusy(b => b + 1);
+      try {
+        const { data, ar } = await makeMomentImage(f);
+        const img = await putImage(data), p = spot();
+        place([{ kind: "photo", img, ar, cap: "", w: 300, rot: wallRand(-8, 8), ...p }]);
+      } catch (e) { alert((e && e.message) || "ลงรูปไม่สำเร็จ"); }
+      finally { setBusy(b => b - 1); }
+    }
+  };
+  const addSticker = k => { setPicker(false); place([{ kind: "sticker", s: k, w: 150, rot: wallRand(-14, 14), ...spot() }]); };
+  const saveText = (t, c) => {
+    const box = textBox;
+    setTextBox(null);
+    if (box.caption) update(box.id, { cap: t });
+    else if (box.edit) update(box.id, { t, c });
+    else place([{ kind: "text", t, c, w: 56, rot: wallRand(-6, 6), ...spot() }]);
+  };
+
+  // ── ลาก / หมุน / ย่อขยาย ด้วยนิ้วหรือเมาส์ · ระหว่างลากเก็บในฉบับร่าง → ปล่อยแล้วค่อยบันทึกครั้งเดียว ──
+  const pt = e => { const r = boardRef.current.getBoundingClientRect(); return [(e.clientX - r.left) / s, (e.clientY - r.top) / s]; };
+  const down = (e, m, mode) => {
+    if (drawing || !mine(m) || (e.button && e.button !== 0)) return;
+    e.stopPropagation();
+    if (mode !== "move") e.preventDefault();
+    setSel(m.id);
+    const [px, py] = pt(e);
+    gest.current = { mode, id: m.id, pid: e.pointerId, px, py, x0: m.x, y0: m.y, w0: m.w, rot0: m.rot || 0, kind: m.kind,
+      a0: Math.atan2(py - m.y, px - m.x), d0: Math.max(1, Math.hypot(px - m.x, py - m.y)), moved: false };
+    try { boardRef.current.setPointerCapture(e.pointerId); } catch (x) {}
+  };
+  const move = e => {
+    if (drawing) {
+      const c = stroke.current;
+      if (!c || e.pointerId !== c.pid) return;
+      const p = pt(e), q = c.pts[c.pts.length - 1];
+      if (Math.hypot(p[0] - q[0], p[1] - q[1]) < 3) return;   // จุดถี่เกิน → ข้าม (ลายเส้นเล็กลง)
+      c.pts.push(p);
+      setDrawing(d => d && ({ ...d, live: c.pts.slice() }));
+      return;
+    }
+    const G = gest.current;
+    if (!G || e.pointerId !== G.pid) return;
+    const [px, py] = pt(e);
+    if (G.mode === "move") {
+      const dx = px - G.px, dy = py - G.py;
+      if (!G.moved && Math.hypot(dx, dy) * s < 4) return;   // แตะเฉย ๆ ไม่นับเป็นการลาก
+      G.moved = true;
+      setDraft({ id: G.id, x: Math.round(clampN(G.x0 + dx, 0, WALL_W)), y: Math.round(clampN(G.y0 + dy, 0, WALL_MAX_H - 300)) });
+    } else if (G.mode === "rot") {
+      let r = G.rot0 + (Math.atan2(py - G.y0, px - G.x0) - G.a0) * 180 / Math.PI;
+      r = ((r % 360) + 540) % 360 - 180;
+      if (Math.abs(r) < 4) r = 0;   // เกือบตรงแล้ว → ตรงพอดี
+      G.moved = true;
+      setDraft({ id: G.id, rot: Math.round(r) });
+    } else {
+      const k = Math.hypot(px - G.x0, py - G.y0) / G.d0, text = G.kind === "text";
+      G.moved = true;
+      setDraft({ id: G.id, w: Math.round(clampN(G.w0 * k, text ? 16 : 40, text ? 220 : 900)) });
+    }
+  };
+  const up = e => {
+    if (drawing) {
+      const c = stroke.current;
+      if (!c || e.pointerId !== c.pid) return;
+      stroke.current = null;
+      setDrawing(d => d && ({ ...d, live: null, strokes: [...d.strokes, { pts: c.pts, c: d.c, sw: d.sw }] }));
+      return;
+    }
+    const G = gest.current;
+    if (!G || e.pointerId !== G.pid) return;
+    gest.current = null;
+    const d = draftRef.current;
+    setDraft(null);
+    if (!G.moved || !d || d.id !== G.id) return;
+    const { id, ...patch } = d;
+    setMoments(ms => { const top = topZOf(ms); return ms.map(m => m.id !== id ? m : { ...m, ...patch, ...(G.mode === "move" && (m.z || 0) < top ? { z: top + 1 } : {}) }); });
+  };
+  const cancel = () => { gest.current = null; stroke.current = null; setDraft(null); setDrawing(d => d && ({ ...d, live: null })); };
+  const drawDown = e => {
+    if (!drawing || (e.button && e.button !== 0)) return;
+    e.preventDefault();
+    const p = pt(e);
+    stroke.current = { pid: e.pointerId, pts: [p] };
+    try { boardRef.current.setPointerCapture(e.pointerId); } catch (x) {}
+    setDrawing(d => ({ ...d, live: [p] }));
+  };
+  // วาดเสร็จ → ลายเส้นสี/ขนาดเดียวกันรวมเป็น 1 ชิ้น (ย้าย หมุน ย่อขยายได้เหมือนชิ้นอื่น)
+  const finishDraw = () => {
+    const groups = {};
+    (drawing ? drawing.strokes : []).forEach(st => { const k = st.c + "|" + st.sw; (groups[k] = groups[k] || []).push(st); });
+    let tooLong = false;
+    const parts = Object.values(groups).map(list => {
+      const sw = list[0].sw, all = [].concat(...list.map(st => st.pts));
+      const x0 = Math.min(...all.map(p => p[0])) - sw, y0 = Math.min(...all.map(p => p[1])) - sw;
+      const x1 = Math.max(...all.map(p => p[0])) + sw, y1 = Math.max(...all.map(p => p[1])) + sw;
+      const d = list.map(st => (st.pts.length > 1 ? st.pts : [st.pts[0], [st.pts[0][0] + .5, st.pts[0][1]]])
+        .map((p, i) => (i ? "L" : "M") + Math.round(p[0] - x0) + " " + Math.round(p[1] - y0)).join(" ")).join(" ");
+      const vw = Math.max(1, Math.round(x1 - x0)), vh = Math.max(1, Math.round(y1 - y0));
+      if (d.length > 30000) { tooLong = true; return null; }
+      return { kind: "draw", d, vw, vh, c: list[0].c, sw, w: clampN(vw, 8, 1200), x: Math.round((x0 + x1) / 2), y: Math.round((y0 + y1) / 2) };
+    }).filter(Boolean);
+    if (tooLong) alert("ลายเส้นยาวเกินไป — ลองวาดสั้นลง หรือแบ่งวาดหลายครั้ง");
+    if (parts.length) place(parts);
+    setDrawing(null);
+  };
+
+  const tap = m => { if (!mine(m) && m.kind === "photo" && !drawing) setView(m); };
+  const key = (e, m) => {
+    if (e.target !== e.currentTarget) return;
+    if (!mine(m)) { if ((e.key === "Enter" || e.key === " ") && m.kind === "photo") { e.preventDefault(); setView(m); } return; }
+    const st = e.shiftKey ? 40 : 10, mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
+    if (mv) { e.preventDefault(); update(m.id, { x: clampN(m.x + mv[0], 0, WALL_W), y: clampN(m.y + mv[1], 0, WALL_MAX_H - 300) }); }
+    else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); remove(m); }
+    else if (e.key === "Escape") setSel(null);
+    else if (e.key === "Enter" && m.kind === "photo") setView(m);
+  };
+  // ตัวจัดการให้ WallItem เรียกผ่าน ref เสมอ (ค่าล่าสุดทุกครั้ง)
+  const api = useRef({}).current;
+  Object.assign(api, { down, tap, key, remove, open: setView, pick: m => setSel(m.id) });
+
+  const drawStrokes = drawing ? [...drawing.strokes, ...(drawing.live ? [{ pts: drawing.live, c: drawing.c, sw: drawing.sw }] : [])] : [];
+  const selMine = selItem && mine(selItem);
+  const tool = "fl-wall-tool";
+  return (
+    <div className="fl-enter">
+      {err && <div className="mb-4"><Note kind="warn">{err}</Note></div>}
+      <div className="fl-wall-frame">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2 pt-1 sm:px-3">
+          <h2 className="fl-wall-title">Moments eFootball</h2>
+          <div className="flex items-center gap-1.5" aria-label="ซูมผนัง">
+            <button type="button" className="fl-wall-zoom" onClick={() => setZoom(z => Math.max(1, Math.round(z / 1.5 * 100) / 100))} disabled={zoom <= 1} aria-label="ซูมออก"><Ic n="minus" size={15} /></button>
+            <span className="w-11 text-center text-xs font-bold tabular-nums text-[#1A1200]">{Math.round(zoom * 100)}%</span>
+            <button type="button" className="fl-wall-zoom" onClick={() => setZoom(z => Math.min(3.4, Math.round(z * 1.5 * 100) / 100))} disabled={zoom >= 3.3} aria-label="ซูมเข้า"><Ic n="plus" size={15} /></button>
+          </div>
+        </div>
+        {canPost ? (
+          <div className="flex flex-wrap gap-1.5 px-2 pb-2.5 sm:px-3">
+            <button type="button" className={tool} onClick={() => fileRef.current && fileRef.current.click()} disabled={busy > 0 || !!drawing}>
+              <Ic n="camera" size={15} /> {busy ? "กำลังลงรูป…" : "เพิ่มรูป"}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" aria-label="เลือกรูปลงผนัง"
+              onChange={e => { const fs = [...e.target.files]; e.target.value = ""; addPhotos(fs); }} />
+            <button type="button" className={tool} onClick={() => setPicker(true)} disabled={!!drawing}><Ic n="smile" size={15} /> สติกเกอร์</button>
+            <button type="button" className={tool} onClick={() => setTextBox({ t: "", c: "yellow" })} disabled={!!drawing}><Ic n="type" size={15} /> ข้อความ</button>
+            <button type="button" className={tool + (drawing ? " fl-on" : "")} aria-pressed={!!drawing}
+              onClick={() => { if (drawing) finishDraw(); else { setSel(null); setDrawing({ strokes: [], live: null, c: "yellow", sw: 8 }); } }}>
+              <Ic n="pencil" size={15} /> {drawing ? "วาดเสร็จ" : "วาดเส้น"}
+            </button>
+          </div>
+        ) : (
+          <p className="px-3 pb-2.5 text-xs font-semibold text-[#3A2A00]">{user ? "ตอนนี้ลงรูปไม่ได้ (ดูข้อความด้านบน)" : "ล็อกอินเพื่อลงรูปและตกแต่งผนัง · ตอนนี้ดูได้อย่างเดียว"}</p>
+        )}
+        <div ref={wrapRef} className="fl-wall-wrap">
+          <div ref={boardRef} className={"fl-wall" + (drawing ? " fl-drawing" : "")} style={{ width: WALL_W * s, height: H * s }}
+            onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}
+            onPointerDown={e => { if (e.target === boardRef.current) setSel(null); }}>
+            {!moments.length && (
+              <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center">
+                <div>
+                  <div className="fl-wall-mark" style={{ fontSize: Math.max(36, 120 * s) }}>MOMENTS</div>
+                  <p className="mt-2 text-sm text-soft">{canPost ? "ผนังยังว่าง · กด “เพิ่มรูป” แปะรูปแรกได้เลย" : "ยังไม่มีรูปบนผนัง"}</p>
+                </div>
+              </div>
+            )}
+            {items.map(m => <WallItem key={m.id} m={m} s={s} src={m.img ? images[m.img] : null} sel={sel === m.id} mine={mine(m)} api={api} />)}
+            {drawing && (
+              <svg className="absolute inset-0 h-full w-full touch-none" style={{ zIndex: 2147483000 }} viewBox={"0 0 " + WALL_W + " " + H}
+                preserveAspectRatio="none" onPointerDown={drawDown} aria-label="พื้นที่วาดเส้น">
+                {drawStrokes.map((st, i) => (
+                  <path key={i} d={st.pts.map((p, j) => (j ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ") + (st.pts.length === 1 ? " l.5 0" : "")}
+                    fill="none" stroke={INK[st.c]} strokeWidth={st.sw} strokeLinecap="round" strokeLinejoin="round" />
+                ))}
+              </svg>
+            )}
+          </div>
+        </div>
+      </div>
+      <p className="ef-halo mt-3 text-xs leading-relaxed text-muted">
+        กดรูปเพื่อดูภาพใหญ่ · ลาก หมุน ย่อขยาย และลบได้เฉพาะชิ้นที่ตัวเองลง{isAdmin ? " · แอดมินจัดการได้ทุกชิ้น" : ""} · ซูมเข้าเพื่อดูละเอียด (เลื่อนซ้ายขวาได้)
+      </p>
+
+      {/* แถบล่างจอ: ระหว่างวาด / ตอนเลือกชิ้นของตัวเอง */}
+      {drawing && (
+        <div className="fl-wall-bar" role="toolbar" aria-label="วาดเส้น">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
+            <InkPicker small value={drawing.c} onChange={c => setDrawing(d => ({ ...d, c }))} />
+            <div className="flex gap-1" role="radiogroup" aria-label="ขนาดเส้น">
+              {[[5, "บาง"], [10, "กลาง"], [18, "หนา"]].map(([w, l]) => (
+                <button key={w} type="button" role="radio" aria-checked={drawing.sw === w} onClick={() => setDrawing(d => ({ ...d, sw: w }))}
+                  className={"ef-btn ef-tab px-3 py-1.5 text-xs " + (drawing.sw === w ? "ef-tab-on" : "")}>{l}</button>
+              ))}
+            </div>
+            <div className="ml-auto flex gap-2">
+              <Btn className="px-3 py-1.5 text-xs" disabled={!drawing.strokes.length} onClick={() => setDrawing(d => ({ ...d, strokes: d.strokes.slice(0, -1) }))}><Ic n="undo" size={13} /> ย้อน</Btn>
+              <Btn className="px-3 py-1.5 text-xs" onClick={() => setDrawing(null)}>ยกเลิก</Btn>
+              <Btn variant="primary" className="px-3 py-1.5 text-xs" onClick={finishDraw}><Ic n="check" size={13} /> เสร็จ</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+      {!drawing && selMine && (
+        <div className="fl-wall-bar" role="toolbar" aria-label="จัดการชิ้นที่เลือก">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
+            {selItem.kind === "photo" && <>
+              <Btn className="px-3 py-1.5 text-xs" onClick={() => setTextBox({ caption: true, id: selItem.id, t: selItem.cap || "" })}><Ic n="pencil" size={13} /> คำบรรยาย</Btn>
+              <Btn className="px-3 py-1.5 text-xs" onClick={() => setView(selItem)}><Ic n="image" size={13} /> ดูรูปใหญ่</Btn>
+            </>}
+            {selItem.kind === "text" && <Btn className="px-3 py-1.5 text-xs" onClick={() => setTextBox({ edit: true, id: selItem.id, t: selItem.t, c: selItem.c })}><Ic n="pencil" size={13} /> แก้ข้อความ</Btn>}
+            {selItem.kind === "draw" && <InkPicker small value={selItem.c} onChange={c => update(selItem.id, { c })} />}
+            <Btn className="px-3 py-1.5 text-xs" onClick={() => toFront(selItem)}><Ic n="layers" size={13} /> ไว้หน้าสุด</Btn>
+            <Btn variant="danger" className="px-3 py-1.5 text-xs" onClick={() => remove(selItem)}><Ic n="trash" size={13} /> ลบ</Btn>
+            <Btn variant="primary" className="ml-auto px-3 py-1.5 text-xs" onClick={() => setSel(null)}><Ic n="check" size={13} /> เสร็จ</Btn>
+          </div>
+        </div>
+      )}
+
+      {picker && <StickerPicker onPick={addSticker} onClose={() => setPicker(false)} />}
+      {textBox && <TextModal init={textBox} caption={!!textBox.caption} onSave={saveText} onClose={() => setTextBox(null)} />}
+      {view && <MomentView m={view} src={view.img ? images[view.img] : null} onClose={() => setView(null)} />}
+    </div>
+  );
+}
+
 /* ══════════════════════════ CLEAR DATA (แอดมิน: ล้างข้อมูลทีละหมวด) ══════════════════════════ */
 // นัดที่แข่งแล้ว → กลับเป็นยังไม่แข่ง (คู่แข่ง สัปดาห์ วันเวลายังอยู่)
 const unplayed = ({ perf, motm, formations, ...m }) => ({ ...m, hs: null, as: null, status: "scheduled", events: [] });
@@ -2926,6 +3472,8 @@ const CLEAR_KINDS = [
     desc: c => "นักเตะ การ์ด OVR ลิงก์ EFHUB และรูปการ์ดของทั้ง " + c.teams + " ทีมกลับเป็นช่องว่าง · ชื่อทีม สี สโมสร และแผนการเล่นยังอยู่" },
   { k: "teams", label: "ทีมทั้งหมด", covers: ["results", "matches", "squads"],
     desc: c => "ลบทั้ง " + c.teams + " ทีม พร้อมนักเตะและโปรแกรมการแข่ง · บัญชีผู้จัดการทีมยังอยู่ แต่จะยังไม่มีทีม (แอดมินผูกทีมให้ใหม่ได้)" },
+  { k: "moments", label: "ผนัง Moments",
+    desc: c => "เอารูป สติกเกอร์ ข้อความ และลายเส้นทั้ง " + c.moments + " ชิ้นออกจากผนัง Moments · ทีมและการแข่งไม่ถูกแตะ" },
 ];
 
 function ClearDataModal({ counts, cloud, onClose, onExport, onClear }) {
@@ -2936,7 +3484,7 @@ function ClearDataModal({ counts, cloud, onClose, onExport, onClear }) {
   const submit = () => {
     if (!chosen.length) return;
     if (!confirm("ล้าง: " + chosen.map(x => x.label).join(" · ") + "?\n\nย้อนกลับไม่ได้" + (cloud ? " · ทุกเครื่องจะเห็นข้อมูลที่ล้างแล้วทันที" : ""))) return;
-    onClear({ results: on("results"), matches: on("matches"), squads: on("squads"), teams: on("teams") });
+    onClear({ results: on("results"), matches: on("matches"), squads: on("squads"), teams: on("teams"), moments: on("moments") });
   };
 
   return (
@@ -2975,6 +3523,8 @@ function FriendsLeague() {
   // CLOUD: ข้อมูลมาจาก Firestore (เริ่มว่าง รอโหลด) · ไม่งั้นเก็บในเบราว์เซอร์ (ครั้งแรก = ข้อมูลตัวอย่าง)
   const [teams, setTeams]     = useState(() => CLOUD ? [] : load("fl_teams", SEED_TEAMS).map(withSquad));
   const [matches, setMatches] = useState(() => CLOUD ? [] : load("fl_matches", SEED_MATCHES));
+  const [moments, setMoments] = useState(() => CLOUD ? [] : (load("fl_moments", []) || []).map(cleanMoment).filter(Boolean));
+  const [momentsErr, setMomentsErr] = useState("");   // CLOUD: อ่านผนังไม่ได้ (เช่น ยังไม่ได้วางกฎรุ่นใหม่)
   const [users, setUsers]     = useState(() => CLOUD ? [] : load("fl_users", []));
   const [session, setSession] = useState(() => { if (CLOUD) return null; const s = load("fl_session", null); return s && s.exp > Date.now() ? s : null; });
   const [tab, setTab]         = useState("home");
@@ -3016,6 +3566,7 @@ function FriendsLeague() {
       if (!CLOUD) {
         const used = new Set();
         teams.forEach(t => teamImageIds(t).forEach(id => used.add(id)));
+        moments.forEach(m => { if (m.img) used.add(m.img); });
         const orphan = Object.keys(m).filter(id => !used.has(id));
         if (orphan.length) ImgDB.del(orphan).catch(() => {});
         orphan.forEach(id => { delete m[id]; });
@@ -3056,27 +3607,35 @@ function FriendsLeague() {
     uploadImages({ [id]: data });
     return id;
   };
-  // รูปที่นักเตะในข้อมูลชุดนี้ใช้อยู่ → แนบไปกับไฟล์ Export
-  const usedImages = teamList => {
-    const out = {};
-    teamList.forEach(t => teamImageIds(t).forEach(id => { if (imagesRef.current[id]) out[id] = imagesRef.current[id]; }));
+  // รูปที่นักเตะและผนัง Moments ในข้อมูลชุดนี้ใช้อยู่ → แนบไปกับไฟล์ Export
+  const usedImages = (teamList, momentList = []) => {
+    const out = {}, take = id => { if (imagesRef.current[id]) out[id] = imagesRef.current[id]; };
+    teamList.forEach(t => teamImageIds(t).forEach(take));
+    momentList.forEach(m => { if (m.img) take(m.img); });
     return out;
   };
   // CLOUD: ทีมอ้างรูปที่เครื่องนี้ยังไม่มี → ดึงจาก Firestore ทีละรูป (ครั้งเดียว แล้วเก็บแคชไว้ในเครื่อง)
   const askedImg = useRef(new Set());
+  const askImage = id => {
+    if (imagesRef.current[id] || askedImg.current.has(id) || !IMG_ID_RE.test(id)) return;
+    askedImg.current.add(id);
+    Cloud.db.collection("images").doc(id).get()
+      .then(s => { if (s.exists) absorbImages({ [id]: (s.data() || {}).data }); })
+      .catch(() => askedImg.current.delete(id));
+  };
   useEffect(() => {
     if (!CLOUD || !Cloud.db || !imgBoot.current) return;
-    imgBoot.current.then(() => teams.forEach(t => teamImageIds(t).forEach(id => {
-      if (imagesRef.current[id] || askedImg.current.has(id) || !IMG_ID_RE.test(id)) return;
-      askedImg.current.add(id);
-      Cloud.db.collection("images").doc(id).get()
-        .then(s => { if (s.exists) absorbImages({ [id]: (s.data() || {}).data }); })
-        .catch(() => askedImg.current.delete(id));
-    })));
+    imgBoot.current.then(() => teams.forEach(t => teamImageIds(t).forEach(askImage)));
   }, [teams]);
+  // รูปบนผนัง Moments ใหญ่กว่ารูปการ์ด → ดึงเฉพาะตอนเปิดแท็บ Moments (คนที่ไม่เปิดแท็บนี้ไม่ต้องโหลด)
+  useEffect(() => {
+    if (!CLOUD || !Cloud.db || !imgBoot.current || tab !== "moments") return;
+    imgBoot.current.then(() => moments.forEach(m => { if (m.img) askImage(m.img); }));
+  }, [moments, tab]);
 
   useEffect(() => { if (!CLOUD) save("fl_teams", teams); }, [teams]);
   useEffect(() => { if (!CLOUD) save("fl_matches", matches); }, [matches]);
+  useEffect(() => { if (!CLOUD) save("fl_moments", moments); }, [moments]);
   useEffect(() => { if (!CLOUD) save("fl_users", users); }, [users]);
   useEffect(() => {
     if (CLOUD) return;
@@ -3095,7 +3654,7 @@ function FriendsLeague() {
   // เปิดให้ผู้จัดการทีมสมัครเองไหม (แอดมินเปิด/ปิด) · CLOUD: meta/settings · null = ยังไม่รู้ / อ่านไม่ได้ (กฎ Firebase รุ่นเก่า)
   const [signup, setSignup]     = useState(() => CLOUD ? null : load("fl_settings", {}).signup !== false);
   useEffect(() => { if (!CLOUD) save("fl_settings", { signup }); }, [signup]);
-  const server     = useRef({ teams: null, matches: null, users: null });
+  const server     = useRef({ teams: null, matches: null, users: null, moments: null });
   const ownerRef   = useRef(owner);
   const settingUp  = useRef(false);
   const afterLogin = useRef(false);
@@ -3133,6 +3692,15 @@ function FriendsLeague() {
         setCloudOk(r => r[name] ? r : { ...r, [name]: true });
       }, bootFail);
       stops.push(watch("teams", setTeams), watch("matches", setMatches));
+      // ผนัง Moments: อ่านไม่ได้ = ยังไม่ได้วางกฎรุ่นใหม่ → แจ้งเฉพาะในแท็บ Moments (ส่วนอื่นของเว็บใช้ได้ตามปกติ)
+      stops.push(db.collection("moments").onSnapshot(meta, s => {
+        if (s.empty && s.metadata.fromCache) return;
+        const list = s.docs.map(d => d.data()).sort((a, b) => a.id - b.id);
+        server.current.moments = new Map(list.map(x => [String(x.id), x]));
+        setMoments(list);
+        setMomentsErr("");
+      }, e => setMomentsErr(e && e.code === "permission-denied"
+        ? "ผนัง Moments ยังเปิดใช้ไม่ได้ — แอดมินต้องวางกฎจากไฟล์ firestore.rules รุ่นล่าสุดใน Firebase ก่อน (ดู README)" : cloudError(e))));
       stops.push(Cloud.auth.onAuthStateChanged(u => setAuthUid(u ? u.uid : null)));
     }).catch(e => alive && bootFail(e));
     return () => { alive = false; stops.forEach(f => f()); window.removeEventListener("online", on); window.removeEventListener("offline", off); };
@@ -3202,14 +3770,16 @@ function FriendsLeague() {
   useEffect(() => { pushChanges("teams", teams, t => String(t.id), t => t); }, [teams]);
   useEffect(() => { pushChanges("matches", matches, m => String(m.id), m => m); }, [matches]);
   useEffect(() => { pushChanges("users", users, u => u.id, withoutId); }, [users]);
+  useEffect(() => { pushChanges("moments", moments, m => String(m.id), m => m); }, [moments]);
   // แจ้งเตือนปัญหาแล้วซ่อนเองใน 8 วิ
   useEffect(() => { if (!cloudErr) return; const t = setTimeout(() => setCloudErr(""), 8000); return () => clearTimeout(t); }, [cloudErr]);
 
   // CLOUD: ข้อมูลที่เคยกรอกในเบราว์เซอร์นี้ (ตอนยังเป็นแบบเครื่องเดียว) → แอดมินกดย้ายขึ้นออนไลน์ได้
   const localLeague = useMemo(() => {
     if (!CLOUD) return null;
-    const t = load("fl_teams", null), m = load("fl_matches", null);
-    return Array.isArray(t) && t.length ? { teams: t.map(withSquad), matches: Array.isArray(m) ? m : [] } : null;
+    const t = load("fl_teams", null), m = load("fl_matches", null), mo = load("fl_moments", null);
+    return Array.isArray(t) && t.length
+      ? { teams: t.map(withSquad), matches: Array.isArray(m) ? m : [], moments: Array.isArray(mo) ? mo.map(cleanMoment).filter(Boolean) : [] } : null;
   }, []);
   // ย้ายแล้ว → ซ่อนปุ่มท้ายหน้าถาวร (กันเผลอเอาข้อมูลเก่าในเครื่องไปทับผลล่าสุดบนออนไลน์)
   const [moved, setMoved] = useState(() => !!load("fl_cloud_moved", false));
@@ -3450,6 +4020,7 @@ function FriendsLeague() {
       else if (o.results) setMatches(ms => ms.map(unplayed));
       if (o.squads) setTeams(ts => ts.map(clearSquad));
     }
+    if (o.moments) setMoments([]);
     setClearOpen(false);
   };
 
@@ -3461,10 +4032,12 @@ function FriendsLeague() {
     const all = await ImgDB.all().catch(() => ({}));
     const used = {};
     localLeague.teams.forEach(t => teamImageIds(t).forEach(id => { if (all[id]) used[id] = all[id]; }));
+    localLeague.moments.forEach(x => { if (x.img && all[x.img]) used[x.img] = all[x.img]; });
     absorbImages(used);
     uploadImages(used);
     setTeams(localLeague.teams);
     setMatches(localLeague.matches);
+    if (localLeague.moments.length) setMoments(localLeague.moments.map(x => ({ ...x, by: user.id })));
     save("fl_cloud_moved", Date.now());
     setMoved(true);
   };
@@ -3481,9 +4054,9 @@ function FriendsLeague() {
     finally { setSharing(false); }
   };
 
-  /* ── Export / Import JSON (ทีม นักเตะ นัด รูปการ์ด — ไม่รวมบัญชีผู้ใช้) ── */
+  /* ── Export / Import JSON (ทีม นักเตะ นัด ผนัง Moments และรูป — ไม่รวมบัญชีผู้ใช้) ── */
   const exportData = () => {
-    const blob = new Blob([JSON.stringify({ teams, matches, images: usedImages(teams) }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ teams, matches, moments, images: usedImages(teams, moments) }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "friends-league.json";
@@ -3500,6 +4073,7 @@ function FriendsLeague() {
         const d = JSON.parse(reader.result);
         if (Array.isArray(d.teams))   setTeams(d.teams.map(withSquad));
         if (Array.isArray(d.matches)) setMatches(d.matches);
+        if (Array.isArray(d.moments)) setMoments(d.moments.map(cleanMoment).filter(Boolean).map(x => user ? { ...x, by: user.id } : x));
         absorbImages(d.images);
         uploadImages(d.images);
       } catch (e) { alert("ไฟล์ไม่ถูกต้อง"); }
@@ -3515,6 +4089,7 @@ function FriendsLeague() {
     { key:"matches",   label:"โปรแกรม/ผล", icon:"calendar" },
     { key:"players",   label:"นักเตะ",     icon:"target" },
     { key:"teams",     label:"ทีมทั้งหมด", icon:"users" },
+    { key:"moments",   label:"Moments",    icon:"camera" },
   ];
   const rounds = [...new Set(matches.map(m => m.round))].sort((a, b) => a - b);
   const matchRow = m => (
@@ -3829,6 +4404,11 @@ function FriendsLeague() {
             </div>
           </div>
         )}
+
+        {/* ═══ MOMENTS (ผนังสมุดภาพ) ═══ */}
+        {tab === "moments" && (
+          <MomentsTab moments={moments} setMoments={setMoments} user={user} isAdmin={isAdmin} err={momentsErr} />
+        )}
         </>)}
       </main>
 
@@ -3878,7 +4458,7 @@ function FriendsLeague() {
           onUsed={() => { window.__flInstall = null; setInstallEvt(null); }} />
       )}
       {clearOpen && isAdmin && (
-        <ClearDataModal counts={{ done: done.length, matches: matches.length, teams: teams.length }} cloud={CLOUD}
+        <ClearDataModal counts={{ done: done.length, matches: matches.length, teams: teams.length, moments: moments.length }} cloud={CLOUD}
           onClose={() => setClearOpen(false)} onExport={exportData} onClear={clearData} />
       )}
       {teamModal && (

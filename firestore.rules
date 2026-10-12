@@ -3,12 +3,13 @@ rules_version = '2';
 // กฎความปลอดภัยของ Friends League (Cloud Firestore)
 // วางทั้งไฟล์ใน Firebase console › Firestore Database › Rules แล้วกด Publish
 //
-// - ทุกคนดูทีม / นัด / รูปการ์ดได้ (ไม่ต้องล็อกอิน)
+// - ทุกคนดูทีม / นัด / รูปการ์ด / ผนัง Moments ได้ (ไม่ต้องล็อกอิน)
 // - เจ้าของลีก = คนแรกที่กด "ตั้งค่าแอดมิน" · ตั้งแล้วเปลี่ยนไม่ได้
 // - แอดมิน: แก้ได้ทุกอย่าง · ผู้จัดการทีม: แก้แค่ทีมตัวเอง · กรรมการ: แก้แค่ผลการแข่ง
 // - สิทธิ์อยู่ใน users/{uid} ซึ่งแอดมินเท่านั้นที่แก้ได้ → ผู้ใช้ตั้งตัวเองเป็นแอดมินไม่ได้
 // - สมัครเอง (ตอนแอดมินเปิดรับสมัคร): ได้แค่บทบาทผู้จัดการทีม + สร้างทีมใหม่ของตัวเอง 1 ทีม ในการบันทึกครั้งเดียวกัน
 // - รายชื่อบัญชีทั้งหมดอ่านได้เฉพาะแอดมิน · คนอื่นอ่านได้แค่บัญชีตัวเอง
+// - ผนัง Moments: ทุกบัญชีในลีกลงรูป/สติกเกอร์/ข้อความ/ลายเส้นได้ · แก้และลบได้แค่ชิ้นของตัวเอง · แอดมินจัดการได้ทุกชิ้น
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -96,10 +97,34 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hs", "as", "status", "events", "perf", "motm", "formations"]));
     }
 
-    // รูปการ์ด: ชื่อเอกสาร = hash ของรูป → สร้างได้ แต่แก้ทับไม่ได้
+    // ผนัง Moments: 1 เอกสาร = 1 ชิ้นบนผนัง · by = uid ของคนลง (เปลี่ยนเจ้าของ/ชนิดไม่ได้)
+    // พิกัดเป็นหน่วยผนัง (กว้าง 1000) · ข้อความ/คำบรรยาย/ลายเส้นมีขนาดจำกัด
+    function momentOk(d) {
+      return d.keys().hasOnly(["id", "kind", "x", "y", "w", "rot", "z", "by", "byName", "at", "img", "ar", "cap", "s", "t", "c", "d", "vw", "vh", "sw"])
+        && d.kind in ["photo", "sticker", "text", "draw"]
+        && d.x is number && d.x >= -500 && d.x <= 1500
+        && d.y is number && d.y >= -500 && d.y <= 50000
+        && d.w is number && d.w >= 8 && d.w <= 1200
+        && d.rot is number && d.rot >= -360 && d.rot <= 360
+        && d.z is number
+        && d.by is string && d.byName is string && d.byName.size() <= 40
+        && d.get("cap", "") is string && d.get("cap", "").size() <= 80
+        && d.get("t", "") is string && d.get("t", "").size() <= 120
+        && d.get("d", "") is string && d.get("d", "").size() <= 30000;
+    }
+    match /moments/{momentId} {
+      allow read: if true;
+      allow create: if role() != "" && request.resource.data.by == request.auth.uid && momentOk(request.resource.data);
+      allow update: if (isAdmin() || (role() != "" && resource.data.by == request.auth.uid))
+        && request.resource.data.by == resource.data.by && request.resource.data.kind == resource.data.kind
+        && momentOk(request.resource.data);
+      allow delete: if isAdmin() || (role() != "" && resource.data.by == request.auth.uid);
+    }
+
+    // รูปการ์ด / รูปบนผนัง Moments: ชื่อเอกสาร = hash ของรูป → สร้างได้ แต่แก้ทับไม่ได้ · ทุกบัญชีในลีกส่งรูปได้
     match /images/{imageId} {
       allow read: if true;
-      allow create: if (role() == "admin" || role() == "manager")
+      allow create: if role() != ""
         && request.resource.data.keys().hasOnly(["data", "at"])
         && request.resource.data.data is string
         && request.resource.data.data.size() < 400000
