@@ -62,6 +62,15 @@ const Ic = ({ n, size = 16, className = "" }) => (
     className={className} dangerouslySetInnerHTML={{ __html: P[n] || "" }} />
 );
 
+// โลโก้เว็บ: ถ้วยเงิน + ลูกบอลแก้ว (ตัววาดอยู่ใน index.html → window.flLogo ใช้ร่วมกับอินโทร)
+// detail "simple" = ที่เล็ก (หัวเว็บ) · "full" = ลายครบ + ชื่อลีกบนครีบแก้ว · ไม่มีตัววาด (หน้าทดสอบ) → ไอคอนถ้วยเดิม
+const Logo = ({ detail = "simple", className = "" }) => {
+  const id = "lg" + React.useId().replace(/[^a-zA-Z0-9]/g, "");
+  if (typeof window.flLogo !== "function") return <span className={"fl-logo grid place-items-center text-ink " + className}><Ic n="trophy" size={20} /></span>;
+  return <span role="img" aria-label="โลโก้ Friends League" className={"fl-logo " + className}
+    dangerouslySetInnerHTML={{ __html: window.flLogo(detail, id, detail === "full" ? "FRIENDS LEAGUE" : "") }} />;
+};
+
 /* ══════════════════════════ STORAGE ══════════════════════════ */
 const load = (key, fallback) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
@@ -2902,7 +2911,7 @@ function InstallModal({ prompt, onUsed, onClose }) {
     <Modal onClose={onClose}>
       <ModalHead kicker="แอปบนมือถือ" title="ติดตั้ง Friends League" onClose={onClose} />
       <div className="mb-5 flex items-center gap-4">
-        <img src="icons/icon-192.png" alt="" className="h-16 w-16 shrink-0 rounded-2xl shadow-lg ring-1 ring-white/15" />
+        <img src="icons/icon-192.png?v=2" alt="" className="h-16 w-16 shrink-0 rounded-2xl shadow-lg ring-1 ring-white/15" />
         <p className="text-sm leading-relaxed text-soft">เปิดจากไอคอนบนหน้าจอโฮมได้เลย เต็มจอเหมือนแอป โหลดเร็วขึ้น และเปิดดูข้อมูลล่าสุดได้แม้เน็ตหลุด · อัปเดตเองทุกครั้งที่เว็บอัปเดต</p>
       </div>
       {prompt && (
@@ -4167,9 +4176,7 @@ function FriendsLeague() {
       <header className="fl-safe sticky top-0 z-40 bg-page/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="ef-btn ef-brand grid h-10 w-12 shrink-0 place-items-center">
-              <Ic n="trophy" size={19} />
-            </div>
+            <Logo className="h-12" />
             <div className="min-w-0">
               <div className="truncate font-display text-xl font-bold italic leading-tight text-ink">Friends League</div>
               <div className="truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-accent">eFootball 2027 Mobile</div>
@@ -4253,7 +4260,7 @@ function FriendsLeague() {
 
             {!installed && installHint && touchScreen && (
               <div className="mb-6 flex items-center gap-3 rounded-xl bg-sunken/90 p-3 ring-1 ring-accent/25">
-                <img src="icons/icon-192.png" alt="" className="h-10 w-10 shrink-0 rounded-xl" />
+                <img src="icons/icon-192.png?v=2" alt="" className="h-10 w-10 shrink-0 rounded-xl" />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-ink">ติดตั้งเป็นแอปบนมือถือ</div>
                   <div className="text-xs text-muted">เปิดจากหน้าจอโฮม เต็มจอ โหลดเร็วขึ้น</div>

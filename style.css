@@ -111,7 +111,8 @@ body::before {
 .fl-intro.play .fl-ring circle { animation: fl-ring-draw .8s cubic-bezier(.2, .8, .2, 1) .7s both; }
 @keyframes fl-ring-draw { to { stroke-dashoffset: 0; } }
 @keyframes fl-ring-spin { from { transform: rotate(-200deg); } to { transform: rotate(-90deg); } }
-.fl-intro .cup { position: absolute; inset: 27%; width: 46%; height: 46%; }
+.fl-intro .cup { position: absolute; inset: 23% 0; display: flex; justify-content: center; }   /* โลโก้สูง 54% ของวง → อยู่ในวงแหวน ไม่แตะเส้น */
+.fl-intro .cup svg { display: block; height: 100%; width: auto; }
 .fl-intro.play .cup { animation: fl-pop .45s cubic-bezier(.3, 1.6, .5, 1) 1.25s both; }
 @keyframes fl-pop { from { transform: scale(0); } to { transform: scale(1); } }
 .fl-intro .word { position: relative; font-family: Kanit, "Noto Sans Thai", sans-serif; font-style: italic; font-weight: 700;
@@ -194,6 +195,9 @@ body::before {
 
 /* โลโก้: บล็อกน้ำเงินเอียง */
 .ef-brand { color: #fff; }
+/* โลโก้ถ้วยบนหัวเว็บ (index.html › window.flLogo) · สูงตามคลาสที่ใส่ กว้างตามสัดส่วนถ้วย */
+.fl-logo { display: inline-block; flex-shrink: 0; }
+.fl-logo svg { display: block; height: 100%; width: auto; filter: drop-shadow(0 4px 10px rgb(0 0 0 / .4)); }
 .ef-brand::before { background: linear-gradient(135deg, #3B82FF, #1D4ED8); box-shadow: 0 8px 20px -10px rgb(47 120 255 / .9); }
 
 /* หัวข้อ: แถบเหลืองเอียงด้านหน้า */

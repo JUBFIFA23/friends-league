@@ -8,8 +8,8 @@
 
 <!-- ═══ แอปบนมือถือ (PWA): ติดตั้งจากเว็บได้ทั้ง Android และ iPhone · manifest.webmanifest + sw.js + icons/ ═══ -->
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png?v=2">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Friends League">
@@ -71,6 +71,68 @@
 </head>
 <body>
 
+  <!-- ═══ โลโก้เว็บ: ถ้วยเงินริบบิ้นสองข้าง + ลูกบอลแก้วลายรังผึ้ง + ลายวงจร (วาดเองตามรูปที่ผู้ใช้ส่งมา · ไม่ใช้รูปจริง) ═══
+       window.flLogo(detail, idPrefix, text) → SVG · "full" = ลายครบ + ข้อความบนครีบแก้ว (อินโทร / ไอคอนแอป)
+       "simple" = เส้นน้อย ชัดตอนเล็ก (หัวเว็บ) · ใช้ร่วมกันทั้งอินโทรด้านล่างและ app.js (คอมโพเนนต์ Logo) -->
+  <script>
+    window.flLogo = function (detail, p, text) {
+      var full = detail === "full";
+      function hex(cx, cy, r) {
+        var s = [];
+        for (var i = 0; i < 6; i++) { var a = Math.PI / 3 * i; s.push((cx + r * Math.cos(a)).toFixed(1) + "," + (cy + r * Math.sin(a)).toFixed(1)); }
+        return s.join(" ");
+      }
+      var C = [58, 36], R = 25, comb = '<polygon points="' + hex(C[0], C[1], 8) + '"/>';
+      if (full) for (var k = 0; k < 6; k++) { var a = Math.PI / 6 + Math.PI / 3 * k; comb += '<polygon points="' + hex(C[0] + 13.9 * Math.cos(a), C[1] + 13.9 * Math.sin(a), 8) + '"/>'; }
+      else for (var j = 0; j < 6; j++) { var b = Math.PI / 3 * j; comb += '<line x1="' + (C[0] + 8 * Math.cos(b)).toFixed(1) + '" y1="' + (C[1] + 8 * Math.sin(b)).toFixed(1) + '" x2="' + (C[0] + 25 * Math.cos(b)).toFixed(1) + '" y2="' + (C[1] + 25 * Math.sin(b)).toFixed(1) + '"/>'; }
+      var cyan = "#3FF0DB";
+      return '<svg viewBox="0 0 120 160" xmlns="http://www.w3.org/2000/svg">' +
+        '<defs>' +
+          '<linearGradient id="' + p + 'sl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".35" stop-color="#DDE5EB"/><stop offset=".7" stop-color="#97A6B4"/><stop offset="1" stop-color="#55636E"/></linearGradient>' +
+          '<linearGradient id="' + p + 'sr" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F6F9FB"/><stop offset=".45" stop-color="#C4CFD8"/><stop offset="1" stop-color="#65737E"/></linearGradient>' +
+          '<linearGradient id="' + p + 'gl" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8FFFC" stop-opacity=".85"/><stop offset=".45" stop-color="#86EEE1" stop-opacity=".42"/><stop offset="1" stop-color="#1FA89A" stop-opacity=".55"/></linearGradient>' +
+          '<radialGradient id="' + p + 'ball" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#F6FFFE"/><stop offset=".42" stop-color="#A9F6EC"/><stop offset=".8" stop-color="#33C7B7"/><stop offset="1" stop-color="#0E5E5A"/></radialGradient>' +
+          '<radialGradient id="' + p + 'glow"><stop offset=".5" stop-color="#5FF5E2" stop-opacity=".5"/><stop offset="1" stop-color="#5FF5E2" stop-opacity="0"/></radialGradient>' +
+          '<clipPath id="' + p + 'clip"><circle cx="' + C[0] + '" cy="' + C[1] + '" r="' + (R - .5) + '"/></clipPath>' +
+        '</defs>' +
+        '<circle cx="' + C[0] + '" cy="' + C[1] + '" r="36" fill="url(#' + p + 'glow)"/>' +
+        // ด้านในถ้วย (เขียวเข้ม) + ลายวงจร
+        '<path d="M27 64 C28 88 42 108 60 118 C77 106 89 84 90 52 C80 62 40 66 27 64 Z" fill="#0B3B3C"/>' +
+        '<g fill="none" stroke="' + cyan + '" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M37 76 H46 L52 82 V96"/><path d="M82 72 H73 L67 78 V100"/>' + (full ? '<path d="M59 74 V90 L55 94"/><path d="M33 70 L40 72"/>' : '') +
+        '</g>' +
+        '<g fill="' + cyan + '"><circle cx="52" cy="96" r="1.8"/><circle cx="67" cy="100" r="1.8"/>' + (full ? '<circle cx="55" cy="94" r="1.6"/>' : '') + '</g>' +
+        // ลูกบอลแก้ว
+        '<circle cx="' + C[0] + '" cy="' + C[1] + '" r="' + R + '" fill="url(#' + p + 'ball)"/>' +
+        '<g clip-path="url(#' + p + 'clip)" fill="none" stroke="#FFFFFF" stroke-opacity=".6" stroke-width="1.1">' + comb + '</g>' +
+        '<circle cx="' + C[0] + '" cy="' + C[1] + '" r="' + R + '" fill="none" stroke="#E6FFFC" stroke-opacity=".8" stroke-width="1.2"/>' +
+        '<path d="M41 22 A21 21 0 0 1 55 13" fill="none" stroke="#FFFFFF" stroke-opacity=".85" stroke-width="3" stroke-linecap="round"/>' +
+        // ริบบิ้นซ้าย (เงิน) ม้วนขึ้นโอบลูกบอลด้านซ้าย · ขอบบนมีแสง
+        '<path d="M57 126 C33 116 15 92 15 64 C15 50 22 40 33 34 L37 41 C29 46 26 54 27 64 C28 88 42 108 60 118 Z" fill="url(#' + p + 'sl)"/>' +
+        '<path d="M16 64 C16 51 22.5 41 32.6 35" fill="none" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round"/>' +
+        (full ? '<path d="M30 50 C28 58 28.5 70 31 80" fill="none" stroke="' + cyan + '" stroke-opacity=".75" stroke-width="1"/>' : '') +
+        // ขอบปากถ้วยด้านหน้า (ลูกบอลดูอยู่ในถ้วย)
+        '<path d="M27 63 C42 72 74 70 90 54" fill="none" stroke="#E9F0F4" stroke-width="2.4" stroke-linecap="round"/>' +
+        // ครีบขวาพุ่งสูง: แบบเต็ม = แก้วใส มีข้อความ · แบบเรียบ = เงิน
+        (full
+          ? '<path d="M61 126 C86 116 101 92 101 64 L104 18 C96 27 91 40 90 52 C89 84 77 106 59 118 Z" fill="url(#' + p + 'gl)" stroke="#EAF6F8" stroke-width="1.3" stroke-linejoin="round"/>' +
+            '<path d="M98 30 C95 42 95.5 64 94 76" fill="none" stroke="' + cyan + '" stroke-opacity=".7" stroke-width="1"/>' +
+            (text ? '<text transform="translate(93.5 103) rotate(-71)" font-family="Kanit, sans-serif" font-style="italic" font-weight="700" font-size="6.4" letter-spacing=".4" fill="#E8FFFC">' + text + '</text>' : '')
+          : '<path d="M61 126 C86 116 101 92 101 64 L104 18 C96 27 91 40 90 52 C89 84 77 106 59 118 Z" fill="url(#' + p + 'sr)"/>') +
+        '<path d="M103.4 20 C97 28 92.5 39 91 51" fill="none" stroke="#FFFFFF" stroke-width="1.1" stroke-linecap="round"/>' +
+        // ก้าน + ฐานแผงวงจร (แบบเต็มมีชิปและเศษแผงลอยข้าง ๆ)
+        '<path d="M55 118 H65 L63 129 H57 Z" fill="#7E8C98"/>' +
+        '<path d="M29 131 H91 L84.5 148 H35.5 Z" fill="#0D3A3B" stroke="' + cyan + '" stroke-width=".9" stroke-linejoin="round"/>' +
+        '<g fill="none" stroke="' + cyan + '" stroke-width="1" stroke-linecap="round"><path d="M36 139 H45"/><path d="M55 138 H65"/><path d="M75 139 H84"/>' + (full ? '<path d="M50 144 H70"/>' : '') + '</g>' +
+        (full
+          ? '<rect x="45" y="134.5" width="10" height="8" rx="1" fill="#072526" stroke="' + cyan + '" stroke-width=".8"/><rect x="65" y="135.5" width="9.5" height="7" rx="1" fill="#072526" stroke="' + cyan + '" stroke-width=".8"/>' +
+            '<path d="M13 136 L25 132.5 L27.5 139 L16 142.5 Z" fill="#0D3A3B" stroke="' + cyan + '" stroke-width=".8"/>' +
+            '<path d="M107 136 L95 132.5 L92.5 139 L104 142.5 Z" fill="#0D3A3B" stroke="' + cyan + '" stroke-width=".8"/>'
+          : '') +
+      '</svg>';
+    };
+  </script>
+
   <!-- ═══ อินโทรตอนเปิดเว็บ แบบตัวอย่างเกม eFootball 2022 (วินาทีที่ 0–8) · ตกแต่งเท่านั้น ═══
        แถบเหลืองกวาดเข้า → วงแหวนวาดรอบถ้วยรางวัล → ชื่อลีก → แถบกวาดออกเข้าหน้าเว็บ (~2.9 วิ · แตะเพื่อข้าม)
        เล่นครั้งแรกที่เปิดเว็บในแท็บนี้ (รีเฟรชไม่เล่นซ้ำ) · prefers-reduced-motion = ไม่เล่น · ไม่ใช้โลโก้ e ของ eFootball (เครื่องหมายการค้า) -->
@@ -89,11 +151,7 @@
     </div>
     <div class="mark">
       <svg class="fl-ring" viewBox="0 0 100 100"><circle cx="50" cy="50" r="38" /></svg>
-      <svg class="cup" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" />
-        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-      </svg>
+      <div class="cup"></div>
     </div>
     <div class="word">FRIENDS LEAGUE</div>
     <div class="sub">EFOOTBALL 2027 MOBILE</div>
@@ -110,7 +168,8 @@
   <script>
     // เปิดแท็บนี้ครั้งแรก + เครื่องไม่ได้ตั้งลดการเคลื่อนไหว → เล่นอินโทร · จบหรือแตะ → ลบทิ้ง (data-intro บน <html> บอกว่าเกิดอะไรขึ้น)
     (function () {
-      var el = document.getElementById("fl-intro"), seen = false;
+      var el = document.getElementById("fl-intro"), seen = false, cup = el.querySelector(".cup");
+      if (cup && window.flLogo) cup.innerHTML = flLogo("full", "in", "FRIENDS LEAGUE");   // โลโก้ใหญ่ในวงแหวน
       try { seen = sessionStorage.getItem("fl_intro") === "1"; sessionStorage.setItem("fl_intro", "1"); } catch (e) {}
       var still = !!window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
       var done = function () { if (el.parentNode) el.parentNode.removeChild(el); };

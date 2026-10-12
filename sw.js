@@ -5,10 +5,10 @@
    - Tailwind และ CSS ฟอนต์ (ไม่ล็อกเวอร์ชัน): ใช้ที่เก็บไว้ทันที แล้วอัปเดตเบื้องหลัง
    - ข้อมูลลีก / ล็อกอิน (Firestore, Firebase Auth) ไม่ผ่านตรงนี้ — Firebase เก็บแคชของมันเอง
    เปลี่ยนเวอร์ชันไลบรารีใน index.html / app.js → แก้รายการ PRECACHE ด้านล่าง แล้วเปลี่ยนเลข CACHE */
-const CACHE = "fl-v1";
+const CACHE = "fl-v2";   // v2: ไอคอนโลโก้ใหม่
 const PRECACHE = [
   "./", "index.html", "app.js", "style.css", "config.js", "manifest.webmanifest",
-  "icons/icon-192.png", "icons/apple-touch-icon.png", "icons/favicon-32.png",
+  "icons/icon-192.png?v=2", "icons/apple-touch-icon.png?v=2", "icons/favicon-32.png?v=2",
   "https://cdn.tailwindcss.com/",
   "https://fonts.googleapis.com/css2?family=Kanit:ital,wght@0,500;0,600;0,700;1,600;1,700&family=Noto+Sans+Thai:wght@400;500;600&display=swap",
   "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
